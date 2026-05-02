@@ -49,7 +49,7 @@ Keep tone friendly, professional, and easy to understand — like talking to a h
 """)
 
 
-def explainability_agent_node(state: NutritionState) -> dict:
+def explainability_node(state: NutritionState) -> dict:
     logger.info("\n Generating recipe explanation...")
 
     recipe = state.final_recipe

@@ -60,7 +60,7 @@ Instructions:
 """)
 
 
-def macro_adjustment_agent_node(state: NutritionState) -> dict:
+def macro_adjustment_node(state: NutritionState) -> dict:
     logger.info(f" Adjusting macros (attempt {state.retry_count + 1})...")
 
     if state.macro_adjustment_output:

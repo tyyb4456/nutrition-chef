@@ -49,11 +49,11 @@ class NutritionState(BaseModel):
     recipe_generated:  bool                   = False
     current_recipe_id: Optional[str]          = None   # DB id of generated recipe
 
-
     # ── Validation ────────────────────────────────────────────
     validation_result: Optional[ValidationResult] = None
     validation_passed: Optional[bool]             = None
     validation_notes:  Optional[str]              = None
+    validation_retries: int                       = 0   # incremented inside graph retry loop
 
     # ── Macro Adjustment ──────────────────────────────────────
     macro_adjustment_output: Optional[MacroAdjustmentOutput] = None
@@ -69,11 +69,17 @@ class NutritionState(BaseModel):
     # ── Explainability ────────────────────────────────────────
     recipe_explanation: Optional[str] = None
 
-
     # ── Feedback ──────────────────────────────────────────────
     feedback_rating:    Optional[int] = None
     feedback_comment:   Optional[str] = None
     feedback_collected: bool          = False
+
+    # ── Follow-up (conversational Q&A / modify after generation) ──────────────
+    followup_prompt:       Optional[str] = None
+    followup_intent:       Optional[str] = None   # "question" | "modify" | "done"
+    followup_answer:       Optional[str] = None
+    followup_modification: Optional[str] = None
+    followup_history:      list[str]     = Field(default_factory=list)
 
     # ── Learning ──────────────────────────────────────────────
     learned_preferences: Optional[LearnedPreferences] = None

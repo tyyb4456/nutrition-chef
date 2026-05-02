@@ -48,7 +48,7 @@ Instructions:
 """)
 
 
-def substitution_agent_node(state: NutritionState) -> dict:
+def substitution_node(state: NutritionState) -> dict:
     logger.info("\n Checking recipe for allergen/preference conflicts...")
 
     # Use the macro-adjusted recipe if available, else original

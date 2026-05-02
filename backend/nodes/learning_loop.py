@@ -1,5 +1,5 @@
 """
-agents/learning_loop_agent.py — Phase 4
+nodes/learning_loop.py — Phase 4
 
 Phase 4 upgrade:
 - Persists updated LearnedPreferences to PostgreSQL + ChromaDB
@@ -65,7 +65,7 @@ Merge with existing preferences. Return empty lists (not null) if no data.
 """)
 
 
-def learning_loop_agent_node(state: NutritionState) -> dict:
+def learning_loop_node(state: NutritionState) -> dict:
     logger.info("\n Learning from feedback...")
 
     existing = state.learned_preferences
