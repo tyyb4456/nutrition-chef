@@ -66,9 +66,9 @@ class RedisClient:
             try:
                 self._client = redis.from_url(REDIS_URL, decode_responses=True)
                 self._client.ping()
-                logger.info("✅ Redis connected: %s", REDIS_URL)
+                logger.info(" 🗸  Redis connected: %s", REDIS_URL)
             except Exception as e:
-                logger.warning("⚠️ Redis unavailable (%s). Caching disabled.", e)
+                logger.warning(" Redis unavailable (%s). Caching disabled.", e)
                 self._client = None
 
     @property

@@ -22,7 +22,7 @@ from sqlalchemy.orm import Session
 
 from db.database import SessionLocal
 from db.models import User
-from core.security import decode_access_token
+from api.core.security import decode_access_token
 
 
 # ── DB Session ────────────────────────────────────────────────────────────────

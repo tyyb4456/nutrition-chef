@@ -20,7 +20,7 @@ from sqlalchemy.orm import Session
 
 from db.models import User, UserFeedback
 from db.repositories import UserRepository
-from schemas.tracking_schemas import (
+from api.schemas.tracking_schemas import (
     SubmitFeedbackRequest, FeedbackResponse, FeedbackListResponse,
 )
 

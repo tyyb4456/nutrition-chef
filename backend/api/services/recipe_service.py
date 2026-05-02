@@ -48,7 +48,7 @@ from nodes.substitution       import substitution_node
 from nodes.explainability     import explainability_node
 from nodes.followup           import followup_node
 from pipeline.nutrition_graph import nutrition_graph
-from schemas.recipe_schemas import (
+from api.schemas.recipe_schemas import (
     GenerateRecipeRequest, RecipeResponse, RecipeSummary, RecipeListResponse,
     IngredientOut, NutritionOut, SubstitutionOut, ValidationOut, FollowupResponse,
 )
@@ -73,6 +73,11 @@ def _build_state_from_profile(
     """
     Load the user's saved profile from DB and construct a NutritionState.
     Request fields override profile values when provided.
+
+    Crucially: also loads learned_preferences from DB so that every new
+    graph thread starts with the user's full accumulated preference history.
+    Preferences are user-scoped in PostgreSQL (written by learning_loop_node),
+    NOT thread-scoped — so they persist across all sessions.
     """
     repo    = UserRepository(db)
     profile = db.query(__import__("db.models", fromlist=["UserProfile"]).UserProfile)\
@@ -88,6 +93,28 @@ def _build_state_from_profile(
     cuisine      = request.cuisine     or prefs.get("cuisine", "any")
     spice_level  = request.spice_level or prefs.get("spice_level", "medium")
     fitness_goal = request.fitness_goal or prefs.get("fitness_goal", "maintenance")
+
+    # ── Load accumulated learned preferences from DB (user-scoped) ────────────
+    # These are written by learning_loop_node after each feedback session.
+    # Loading them here ensures every new recipe thread benefits from all past
+    # learning — preferences are NOT stored in the graph checkpoint (thread-scoped).
+    learned_prefs = None
+    try:
+        from memory.progress_store import load_learned_preferences
+        learned_prefs = load_learned_preferences(user.id)
+        if learned_prefs:
+            logger.info(
+                "Loaded learned preferences for user %s "
+                "(likes=%d, dislikes=%d, insights=%d)",
+                user.id,
+                len(learned_prefs.liked_ingredients),
+                len(learned_prefs.disliked_ingredients),
+                len(learned_prefs.session_insights),
+            )
+        else:
+            logger.info("No learned preferences yet for user %s — starting fresh.", user.id)
+    except Exception as e:
+        logger.warning("Could not load learned preferences for user %s: %s", user.id, e)
 
     return NutritionState(
         # Identity
@@ -112,8 +139,12 @@ def _build_state_from_profile(
             **({("meal_type"): request.meal_type} if request.meal_type else {}),
         },
 
+        # ── Inject user's accumulated learning history ─────────────────────
+        learned_preferences = learned_prefs,
+
         profile_collected = True,   # skip profile_agent
     )
+
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -373,9 +404,9 @@ async def followup_recipe(
     Does NOT use the compiled graph — no interrupt needed for this flow.
     """
     import asyncio
-    from schemas.recipe_schemas import FollowupResponse
+    from api.schemas.recipe_schemas import FollowupResponse
     from schemas.nutrition_schemas import (
-        RecipeOutput, Ingredient, NutritionFacts,
+        RecipeOutput, Ingredient, NutritionFacts
     )
 
     loop = asyncio.get_event_loop()

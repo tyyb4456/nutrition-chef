@@ -185,3 +185,150 @@ class LearnedPreferences(BaseModel):
     spice_preference:     Optional[str] = None
     goal_refinement:      Optional[str] = None
     session_insights:     list[str]    = Field(default_factory=list)
+
+
+
+# for now 
+
+
+# ── 3.1 Meal Plan ─────────────────────────────────────────────
+
+MealSlotType = Literal["breakfast", "lunch", "dinner", "snack"]
+DayOfWeek    = Literal["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+
+
+class MealSlot(BaseModel):
+    """A single meal within a day."""
+    slot:             MealSlotType    = Field(...)
+    recipe:           RecipeOutput    = Field(...)
+    target_calories:  int             = Field(..., ge=0)
+
+
+class DayPlan(BaseModel):
+    """All meals for one day of the week."""
+    day:        DayOfWeek       = Field(...)
+    meals:      list[MealSlot]  = Field(...)
+    total_calories:  int        = Field(..., ge=0)
+    total_protein_g: float      = Field(..., ge=0)
+    total_carbs_g:   float      = Field(..., ge=0)
+    total_fat_g:     float      = Field(..., ge=0)
+    total_fiber_g:   float      = Field(default=0.0, ge=0)
+
+
+class WeeklyNutritionSummary(BaseModel):
+    """Aggregated nutrition across all 7 days."""
+    avg_daily_calories:  float = Field(...)
+    avg_daily_protein_g: float = Field(...)
+    avg_daily_carbs_g:   float = Field(...)
+    avg_daily_fat_g:     float = Field(...)
+    avg_daily_fiber_g:   float = Field(default=0.0)
+    total_weekly_calories: int = Field(...)
+    calorie_target_hit_days: int = Field(..., description="Days within ±10% of target")
+    notes:               str  = Field(default="")
+
+
+class MealPlan(BaseModel):
+    """Full 7-day meal plan."""
+    days:              list[DayPlan]            = Field(...)
+    weekly_summary:    WeeklyNutritionSummary   = Field(...)
+    plan_generated_at: Optional[str]            = None   # ISO timestamp
+
+
+# ── 3.2 Grocery List ──────────────────────────────────────────
+
+class GroceryItem(BaseModel):
+    name:              str            = Field(...)
+    total_quantity:    str            = Field(..., description="Consolidated quantity e.g. '1.4kg'")
+    category:          str            = Field(..., description="produce / protein / dairy / pantry / spices / frozen")
+    estimated_cost_pkr: Optional[float] = Field(default=None, ge=0)
+    bulk_buy_tip:      Optional[str]  = None
+
+
+class GroceryList(BaseModel):
+    items:             list[GroceryItem] = Field(...)
+    total_items:       int               = Field(...)
+    estimated_total_cost_pkr: Optional[float] = None
+    bulk_buy_savings:  Optional[str]     = None
+    shopping_notes:    Optional[str]     = None
+
+    def by_category(self) -> dict[str, list[GroceryItem]]:
+        """Group items by category for display."""
+        result: dict[str, list[GroceryItem]] = {}
+        for item in self.items:
+            result.setdefault(item.category, []).append(item)
+        return result
+
+
+# ── 3.3 Meal Prep Schedule ────────────────────────────────────
+
+class PrepTask(BaseModel):
+    """A single batch-cooking task."""
+    task:              str           = Field(..., description="e.g. 'Cook 2kg brown rice'")
+    prep_day:          str           = Field(..., description="e.g. 'Sunday' or 'Wednesday'")
+    duration_minutes:  int           = Field(..., ge=1)
+    covers_meals:      list[str]     = Field(..., description="Dish names this prep covers")
+    storage_instruction: str         = Field(..., description="e.g. 'Refrigerate in airtight container, use within 4 days'")
+    reheating_tip:     Optional[str] = None
+
+
+class MealPrepSchedule(BaseModel):
+    tasks:               list[PrepTask] = Field(...)
+    total_prep_time_min: int            = Field(..., ge=0)
+    prep_days:           list[str]      = Field(..., description="Which days require prep")
+    efficiency_notes:    str            = Field(default="")
+
+
+# ── 3.4 Progress Tracking ─────────────────────────────────────
+
+class MealLogEntry(BaseModel):
+    """One logged meal (consumed vs planned)."""
+    log_date:        str            = Field(..., description="ISO date e.g. '2025-03-01'")
+    meal_slot:       MealSlotType   = Field(...)
+    dish_name:       str            = Field(...)
+    planned:         bool           = Field(..., description="Was this a planned meal?")
+    calories:        int            = Field(..., ge=0)
+    protein_g:       float          = Field(..., ge=0)
+    carbs_g:         float          = Field(..., ge=0)
+    fat_g:           float          = Field(..., ge=0)
+    source:          str            = Field(default="manual", description="manual / image / plan")
+
+
+class DailyAdherence(BaseModel):
+    """Adherence summary for one day."""
+    log_date:          str   = Field(...)
+    planned_calories:  int   = Field(...)
+    actual_calories:   int   = Field(...)
+    adherence_pct:     float = Field(...)
+    meals_logged:      int   = Field(...)
+    meals_skipped:     int   = Field(...)
+
+
+class WeeklyProgressReport(BaseModel):
+    """LLM-generated progress analysis."""
+    week_start:          str        = Field(...)
+    week_end:            str        = Field(...)
+    avg_adherence_pct:   float      = Field(...)
+    best_day:            str        = Field(...)
+    worst_day:           str        = Field(...)
+    patterns_identified: list[str]  = Field(default_factory=list)
+    recommendations:     list[str]  = Field(default_factory=list)
+    goal_progress:       str        = Field(...)
+    motivational_note:   str        = Field(default="")
+
+
+# ── 3.5 Food Image Analysis ───────────────────────────────────
+
+class IdentifiedFoodItem(BaseModel):
+    """One food item detected in the image."""
+    name:            str            = Field(...)
+    estimated_amount: str           = Field(..., description="e.g. '1 cup' or '150g'")
+    confidence:      str            = Field(..., description="high / medium / low")
+
+
+class FoodImageAnalysis(BaseModel):
+    """Full result from the vision LLM."""
+    identified_items:   list[IdentifiedFoodItem] = Field(...)
+    estimated_nutrition: NutritionFacts           = Field(...)
+    meal_type_guess:    Optional[MealSlotType]    = None
+    analysis_notes:     str                       = Field(default="")
+    confidence_overall: str                       = Field(..., description="high / medium / low")

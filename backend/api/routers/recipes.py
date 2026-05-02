@@ -14,12 +14,12 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from dependencies import get_db, get_current_user
-from schemas.recipe_schemas import (
+from api.dependencies import get_db, get_current_user
+from api.schemas.recipe_schemas import (
     GenerateRecipeRequest, RecipeResponse, RecipeSummary, RecipeListResponse,
     FollowupRequest, FollowupResponse,                                     # ← Phase 8
 )
-from services.recipe_service import (
+from api.services.recipe_service import (
     generate_recipe, get_recipe_by_id, list_user_recipes,
     followup_recipe,                                                        # ← Phase 8
 )

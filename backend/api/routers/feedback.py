@@ -14,11 +14,11 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from dependencies import get_db, get_current_user
-from schemas.tracking_schemas import (
+from api.dependencies import get_db, get_current_user
+from api.schemas.tracking_schemas import (
     SubmitFeedbackRequest, FeedbackResponse, FeedbackListResponse,
 )
-from services.tracking_service import (
+from api.services.tracking_service import (
     submit_feedback, list_feedback, delete_feedback,
 )
 from db.models import User

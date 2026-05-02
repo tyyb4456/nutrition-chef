@@ -27,6 +27,9 @@ from sqlalchemy.pool import NullPool
 
 from db.models import Base
 
+from dotenv import load_dotenv
+# Load environment variables from .env file (if present)
+load_dotenv()
 
 # ── Connection string ─────────────────────────────────────────────────────────
 # Reads from environment. Falls back to a local dev DB.
@@ -105,3 +108,7 @@ def drop_tables() -> None:
     """Drop all tables. DANGEROUS — dev/test only."""
     Base.metadata.drop_all(bind=engine)
     print("⚠️ All tables dropped.")
+
+if __name__ == "__main__":
+    # Run this file directly to create tables in the database.
+    create_tables()

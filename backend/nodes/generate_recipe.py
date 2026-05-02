@@ -161,6 +161,8 @@ def recipe_generator_node(state: NutritionState) -> dict:
     age_notes     = age_profile.notes     if age_profile else "Standard adult guidelines."
     conditions_str = ", ".join(c.condition for c in state.medical_conditions) if state.medical_conditions else "none"
 
+    logger.info(f"   learned preference till now   :\n{state.learned_preferences}" )
+
     messages = RECIPE_PROMPT.format_messages(
         age=state.age or "not specified",
         age_group=age_group,
@@ -179,6 +181,8 @@ def recipe_generator_node(state: NutritionState) -> dict:
         learned_preferences_text=_format_learned_preferences(state.learned_preferences),
         recipe_context=_format_recipe_context(contexts),
     )
+
+
 
     # ── 4. LLM call ───────────────────────────────────────────────────────────
     recipe: RecipeOutput = llm.invoke(messages)
