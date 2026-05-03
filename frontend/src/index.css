@@ -1,1 +1,113 @@
 @import "tailwindcss";
+
+/* ── Dark mode via .dark class on <html> ── */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ── Design tokens ── */
+@theme {
+  --font-sans:    "DM Sans", system-ui, sans-serif;
+  --font-display: "Space Grotesk", system-ui, sans-serif;
+
+  /* Cyprus — deep teal */
+  --color-cyprus:         #004643;
+  --color-cyprus-light:   #005c58;
+  --color-cyprus-lighter: #00746e;
+  --color-cyprus-dark:    #002e2b;
+  --color-cyprus-darker:  #001a18;
+
+  /* Sand — warm cream */
+  --color-sand:           #F0EDE5;
+  --color-sand-dark:      #e4dfd6;
+  --color-sand-darker:    #d5d0c7;
+  --color-sand-darkest:   #c2bdb4;
+}
+
+/* ── Base ── */
+* { box-sizing: border-box; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  background-color: #F0EDE5;
+  color: #004643;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+.dark body {
+  background-color: #004643;
+  color: #F0EDE5;
+}
+
+/* ── Typography ── */
+.font-display { font-family: var(--font-display); }
+
+/* ── Gradient text (Cyprus → teal) ── */
+.gradient-text {
+  background: linear-gradient(135deg, #004643 0%, #00746e 60%, #009e96 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.dark .gradient-text {
+  background: linear-gradient(135deg, #F0EDE5 0%, #c8f5f0 60%, #9ef0e8 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ── Hero radial ── */
+.hero-bg {
+  background: radial-gradient(ellipse 75% 65% at 65% 45%, #e4f0ee 0%, #F0EDE5 55%, #F0EDE5 100%);
+}
+.dark .hero-bg {
+  background: radial-gradient(ellipse 75% 65% at 65% 45%, #005c58 0%, #004643 55%, #004643 100%);
+}
+
+/* ── Card lift on hover ── */
+.card-lift {
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
+}
+.card-lift:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 16px 40px rgba(0, 70, 67, 0.12);
+}
+.dark .card-lift:hover {
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35);
+}
+
+/* ── Animations ── */
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50%       { transform: translateY(-10px); }
+}
+.animate-float { animation: float 5s ease-in-out infinite; }
+
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-up { animation: fadeUp 0.55s ease forwards; }
+
+@keyframes shimmer {
+  0%   { background-position: -200% center; }
+  100% { background-position: 200% center; }
+}
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar { width: 5px; }
+::-webkit-scrollbar-track { background: #F0EDE5; }
+::-webkit-scrollbar-thumb { background: #004643; border-radius: 3px; }
+.dark ::-webkit-scrollbar-track { background: #002e2b; }
+.dark ::-webkit-scrollbar-thumb { background: #F0EDE5; }
+
+/* ── Theme transition ── */
+*, *::before, *::after {
+  transition-property: background-color, border-color, color;
+  transition-duration: 0.2s;
+  transition-timing-function: ease;
+}
+/* Don't animate transforms / opacity with the global rule */
+.card-lift, .animate-float, img, svg { transition-property: none; }
+.card-lift { transition: transform 0.25s ease, box-shadow 0.25s ease; }
