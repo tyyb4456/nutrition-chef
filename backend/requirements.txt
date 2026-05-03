@@ -29,3 +29,5 @@ uvicorn
 pydantic[email]
 
 langgraph-checkpoint-postgres
+
+python-multipart
