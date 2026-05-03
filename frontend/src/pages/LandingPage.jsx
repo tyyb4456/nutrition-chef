@@ -3,7 +3,6 @@ import Features     from '../components/landing/Features'
 import HowItWorks   from '../components/landing/HowItWorks'
 import MealShowcase from '../components/landing/MealShowcase'
 import Testimonials from '../components/landing/Testimonials'
-import Pricing      from '../components/landing/Pricing'
 import CtaBanner    from '../components/landing/CtaBanner'
 
 export default function LandingPage() {
@@ -14,7 +13,6 @@ export default function LandingPage() {
       <HowItWorks />
       <MealShowcase />
       <Testimonials />
-      <Pricing />
       <CtaBanner />
     </main>
   )

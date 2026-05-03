@@ -1,19 +1,21 @@
 import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Menu, X, Leaf, ArrowRight } from 'lucide-react'
 import ThemeToggle from '../ui/ThemeToggle'
-import Button from '../ui/Button'
+import { useAuth } from '../../context/AuthContext'
 
 const navLinks = [
   { label: 'Features',     href: '#features' },
   { label: 'How It Works', href: '#how-it-works' },
   { label: 'Meals',        href: '#meals' },
-  { label: 'Pricing',      href: '#pricing' },
   { label: 'Testimonials', href: '#testimonials' },
 ]
 
 export default function Navbar() {
   const [scrolled, setScrolled] = useState(false)
-  const [open, setOpen] = useState(false)
+  const [open,     setOpen]     = useState(false)
+  const { user }   = useAuth()
+  const navigate   = useNavigate()
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 24)
@@ -33,12 +35,12 @@ export default function Navbar() {
         <div className="flex items-center justify-between h-16 md:h-20">
 
           {/* Logo */}
-          <a href="#" className="flex items-center gap-2.5 group">
+          <a href="/" className="flex items-center gap-2.5 group">
             <div className="w-9 h-9 rounded-xl bg-cyprus dark:bg-sand flex items-center justify-center shadow-md group-hover:shadow-cyprus/30 dark:group-hover:shadow-sand/20 transition-shadow duration-300">
               <Leaf size={18} className="text-sand dark:text-cyprus" strokeWidth={2.5} />
             </div>
             <span className="font-display font-bold text-xl text-cyprus dark:text-sand tracking-tight">
-              Nutrition<span className="opacity-60">AI</span>
+              Nutrition<span className="opacity-50">AI</span>
             </span>
           </a>
 
@@ -58,13 +60,29 @@ export default function Navbar() {
           {/* Right actions */}
           <div className="hidden md:flex items-center gap-3">
             <ThemeToggle />
-            <a href="#" className="text-sm font-medium text-cyprus/70 dark:text-sand/70 hover:text-cyprus dark:hover:text-sand transition-colors px-2">
-              Sign In
-            </a>
-            <Button href="#pricing" size="sm">
-              Get Started
-              <ArrowRight size={15} strokeWidth={2.5} />
-            </Button>
+            {user ? (
+              <button
+                onClick={() => navigate('/dashboard')}
+                className="inline-flex items-center gap-1.5 bg-cyprus dark:bg-sand hover:bg-cyprus-light dark:hover:bg-sand-dark text-sand dark:text-cyprus text-sm font-semibold px-5 py-2.5 rounded-full shadow-md transition-all duration-300 cursor-pointer"
+              >
+                Dashboard <ArrowRight size={15} strokeWidth={2.5} />
+              </button>
+            ) : (
+              <>
+                <button
+                  onClick={() => navigate('/auth')}
+                  className="text-sm font-medium text-cyprus/70 dark:text-sand/70 hover:text-cyprus dark:hover:text-sand transition-colors px-2 cursor-pointer"
+                >
+                  Sign In
+                </button>
+                <button
+                  onClick={() => navigate('/auth')}
+                  className="inline-flex items-center gap-1.5 bg-cyprus dark:bg-sand hover:bg-cyprus-light dark:hover:bg-sand-dark text-sand dark:text-cyprus text-sm font-semibold px-5 py-2.5 rounded-full shadow-md transition-all duration-300 cursor-pointer"
+                >
+                  Get Started <ArrowRight size={15} strokeWidth={2.5} />
+                </button>
+              </>
+            )}
           </div>
 
           {/* Mobile row */}
@@ -73,7 +91,7 @@ export default function Navbar() {
             <button
               onClick={() => setOpen(!open)}
               aria-label="Toggle menu"
-              className="p-2 rounded-xl text-cyprus dark:text-sand hover:bg-cyprus/10 dark:hover:bg-sand/10 transition-colors"
+              className="p-2 rounded-xl text-cyprus dark:text-sand hover:bg-cyprus/10 dark:hover:bg-sand/10 transition-colors cursor-pointer"
             >
               {open ? <X size={22} /> : <Menu size={22} />}
             </button>
@@ -94,12 +112,26 @@ export default function Navbar() {
               </a>
             ))}
             <div className="px-4 pt-3 border-t border-cyprus/10 dark:border-sand/10 mt-2 flex flex-col gap-2">
-              <a href="#" className="text-center text-sm font-medium text-cyprus/70 dark:text-sand/70 py-2">
-                Sign In
-              </a>
-              <Button href="#pricing" onClick={() => setOpen(false)} className="w-full justify-center">
-                Get Started Free <ArrowRight size={15} />
-              </Button>
+              {user ? (
+                <button
+                  onClick={() => { navigate('/dashboard'); setOpen(false) }}
+                  className="text-center bg-cyprus dark:bg-sand text-sand dark:text-cyprus text-sm font-bold px-5 py-3 rounded-full cursor-pointer"
+                >
+                  Go to Dashboard
+                </button>
+              ) : (
+                <>
+                  <button onClick={() => { navigate('/auth'); setOpen(false) }} className="text-center text-sm font-medium text-cyprus/70 dark:text-sand/70 py-2 cursor-pointer">
+                    Sign In
+                  </button>
+                  <button
+                    onClick={() => { navigate('/auth'); setOpen(false) }}
+                    className="text-center bg-cyprus dark:bg-sand text-sand dark:text-cyprus text-sm font-bold px-5 py-3 rounded-full cursor-pointer"
+                  >
+                    Get Started Free
+                  </button>
+                </>
+              )}
             </div>
           </div>
         )}
