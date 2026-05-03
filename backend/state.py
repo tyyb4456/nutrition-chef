@@ -13,6 +13,7 @@ from schemas.nutrition_schemas import (
     MacroAdjustmentOutput,
     SubstitutionOutput,
     LearnedPreferences,
+    WeeklyProgressReport
 )
 
 class NutritionState(BaseModel):
@@ -84,3 +85,9 @@ class NutritionState(BaseModel):
     # ── Learning ──────────────────────────────────────────────
     learned_preferences: Optional[LearnedPreferences] = None
     updated_goals:       Optional[str]                = None
+
+    progress_report: Optional[WeeklyProgressReport] = None
+    progress_days:   int                             = 7   # days window for progress report
+
+    # ── Pipeline error propagation ────────────────────────────────────────────
+    pipeline_error: Optional[str] = None

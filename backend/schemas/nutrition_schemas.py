@@ -187,6 +187,22 @@ class LearnedPreferences(BaseModel):
     session_insights:     list[str]    = Field(default_factory=list)
 
 
+# ---------
+# progress report related schemas
+# ---------
+
+class WeeklyProgressReport(BaseModel):
+    """LLM-generated progress analysis."""
+    week_start:          str        = Field(...)
+    week_end:            str        = Field(...)
+    avg_adherence_pct:   float      = Field(...)
+    best_day:            str        = Field(...)
+    worst_day:           str        = Field(...)
+    patterns_identified: list[str]  = Field(default_factory=list)
+    recommendations:     list[str]  = Field(default_factory=list)
+    goal_progress:       str        = Field(...)
+    motivational_note:   str        = Field(default="")
+
 
 # for now 
 
@@ -303,17 +319,7 @@ class DailyAdherence(BaseModel):
     meals_skipped:     int   = Field(...)
 
 
-class WeeklyProgressReport(BaseModel):
-    """LLM-generated progress analysis."""
-    week_start:          str        = Field(...)
-    week_end:            str        = Field(...)
-    avg_adherence_pct:   float      = Field(...)
-    best_day:            str        = Field(...)
-    worst_day:           str        = Field(...)
-    patterns_identified: list[str]  = Field(default_factory=list)
-    recommendations:     list[str]  = Field(default_factory=list)
-    goal_progress:       str        = Field(...)
-    motivational_note:   str        = Field(default="")
+
 
 
 # ── 3.5 Food Image Analysis ───────────────────────────────────

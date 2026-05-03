@@ -55,16 +55,16 @@ def log_meal(user_id: str, entry: MealLogEntry, recipe_id: Optional[str] = None)
             repo = ProgressRepository(db)
             repo.log_meal(user_id, entry, recipe_id=recipe_id)
         logger.info("Meal logged to DB: %s (%d kcal)", entry.dish_name, entry.calories)
-        print(f"   📝 Logged to DB: {entry.dish_name} ({entry.calories} kcal) on {entry.log_date}")
+        logger.info(f"   🗸   Logged to DB: {entry.dish_name} ({entry.calories} kcal) on {entry.log_date}")
         return
     except Exception as e:
-        logger.warning("DB log_meal failed (%s) — falling back to JSON.", e)
+        logger.warning("   ⚠   DB log_meal failed (%s) — falling back to JSON.", e)
 
     # ── JSON fallback ─────────────────────────────────────────────────────────
     data = _load_json(user_id)
     data["logs"].append(entry.model_dump())
     _save_json(user_id, data)
-    print(f"   📝 Logged to file: {entry.dish_name} ({entry.calories} kcal) on {entry.log_date}")
+    logger.info(f"   🗸   Logged to file: {entry.dish_name} ({entry.calories} kcal) on {entry.log_date}")
 
 
 def get_logs(user_id: str, days: int = 7) -> list[MealLogEntry]:
@@ -75,7 +75,7 @@ def get_logs(user_id: str, days: int = 7) -> list[MealLogEntry]:
         with get_db() as db:
             return ProgressRepository(db).get_logs(user_id, days)
     except Exception as e:
-        logger.warning("DB get_logs failed (%s) — falling back to JSON.", e)
+        logger.warning("   ⚠       DB get_logs failed (%s) — falling back to JSON.", e)
 
     # ── JSON fallback ─────────────────────────────────────────────────────────
     data   = _load_json(user_id)
@@ -101,7 +101,7 @@ def get_daily_adherence(
                 user_id, planned_calories_per_day, days
             )
     except Exception as e:
-        logger.warning("DB get_daily_adherence failed (%s) — computing from JSON.", e)
+        logger.warning("   ⚠   DB get_daily_adherence failed (%s) — computing from JSON.", e)
 
     # ── JSON fallback: compute from raw logs ──────────────────────────────────
     from schemas.nutrition_schemas import DailyAdherence as DA
@@ -132,9 +132,9 @@ def save_learned_preferences(user_id: str, prefs: LearnedPreferences) -> None:
         from db.repositories import LearnedPreferencesRepository
         with get_db() as db:
             LearnedPreferencesRepository(db).save(user_id, prefs)
-        logger.info("Learned preferences saved to DB for user %s", user_id)
+        logger.info("   🗸   Learned preferences saved to DB for user %s", user_id)
     except Exception as e:
-        logger.warning("DB save_learned_preferences failed (%s) — saving to JSON.", e)
+        logger.warning("   ⚠   DB save_learned_preferences failed (%s) — saving to JSON.", e)
         data = _load_json(user_id)
         data["learned_preferences"] = prefs.model_dump()
         _save_json(user_id, data)
@@ -162,7 +162,7 @@ def load_learned_preferences(user_id: str) -> Optional[LearnedPreferences]:
         with get_db() as db:
             return LearnedPreferencesRepository(db).load(user_id)
     except Exception as e:
-        logger.warning("DB load_learned_preferences failed (%s) — loading from JSON.", e)
+        logger.warning("   ⚠   DB load_learned_preferences failed (%s) — loading from JSON.", e)
 
     data = _load_json(user_id)
     raw  = data.get("learned_preferences")
