@@ -9,9 +9,9 @@ from typing import Annotated, Optional
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 from sqlalchemy.orm import Session
 
-from dependencies import get_db, get_current_user
-from schemas.image_schemas import AnalyseImageRequest, ImageAnalysisResponse
-from services.image_service import analyse_image_base64, analyse_image_upload
+from api.dependencies import get_db, get_current_user
+from api.schemas.image_schemas import AnalyseImageRequest, ImageAnalysisResponse
+from api.services.image_service import analyse_image_base64, analyse_image_upload
 from db.models import User
 
 logger = logging.getLogger(__name__)
