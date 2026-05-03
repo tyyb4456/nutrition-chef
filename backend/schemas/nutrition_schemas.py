@@ -172,6 +172,8 @@ class SubstitutionOutput(BaseModel):
 
 
 
+
+
 # ------- 
 # learning related schemas
 # -------
@@ -204,10 +206,37 @@ class WeeklyProgressReport(BaseModel):
     motivational_note:   str        = Field(default="")
 
 
-# for now 
+# ── 3.4 Progress Tracking ─────────────────────────────────────
+
+class MealLogEntry(BaseModel):
+    """One logged meal (consumed vs planned)."""
+    log_date:        str            = Field(..., description="ISO date e.g. '2025-03-01'")
+    meal_slot:       MealSlotType   = Field(...)
+    dish_name:       str            = Field(...)
+    planned:         bool           = Field(..., description="Was this a planned meal?")
+    calories:        int            = Field(..., ge=0)
+    protein_g:       float          = Field(..., ge=0)
+    carbs_g:         float          = Field(..., ge=0)
+    fat_g:           float          = Field(..., ge=0)
+    source:          str            = Field(default="manual", description="manual / image / plan")
 
 
-# ── 3.1 Meal Plan ─────────────────────────────────────────────
+class DailyAdherence(BaseModel):
+    """Adherence summary for one day."""
+    log_date:          str   = Field(...)
+    planned_calories:  int   = Field(...)
+    actual_calories:   int   = Field(...)
+    adherence_pct:     float = Field(...)
+    meals_logged:      int   = Field(...)
+    meals_skipped:     int   = Field(...)
+
+
+
+
+
+# --------
+# meal plan related schemas (for weekly_plan_agent)
+# --------
 
 MealSlotType = Literal["breakfast", "lunch", "dinner", "snack"]
 DayOfWeek    = Literal["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
@@ -294,32 +323,7 @@ class MealPrepSchedule(BaseModel):
     efficiency_notes:    str            = Field(default="")
 
 
-# ── 3.4 Progress Tracking ─────────────────────────────────────
-
-class MealLogEntry(BaseModel):
-    """One logged meal (consumed vs planned)."""
-    log_date:        str            = Field(..., description="ISO date e.g. '2025-03-01'")
-    meal_slot:       MealSlotType   = Field(...)
-    dish_name:       str            = Field(...)
-    planned:         bool           = Field(..., description="Was this a planned meal?")
-    calories:        int            = Field(..., ge=0)
-    protein_g:       float          = Field(..., ge=0)
-    carbs_g:         float          = Field(..., ge=0)
-    fat_g:           float          = Field(..., ge=0)
-    source:          str            = Field(default="manual", description="manual / image / plan")
-
-
-class DailyAdherence(BaseModel):
-    """Adherence summary for one day."""
-    log_date:          str   = Field(...)
-    planned_calories:  int   = Field(...)
-    actual_calories:   int   = Field(...)
-    adherence_pct:     float = Field(...)
-    meals_logged:      int   = Field(...)
-    meals_skipped:     int   = Field(...)
-
-
-
+# for now -- its additional 
 
 
 # ── 3.5 Food Image Analysis ───────────────────────────────────
