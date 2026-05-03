@@ -32,7 +32,7 @@ from nodes.health_goal        import health_goal_node
 from nodes.weekly_plan   import weekly_plan_node
 from nodes.grocery       import grocery_node
 from nodes.meal_prep     import meal_prep_node
-from schemas.meal_plan_schemas import (
+from api.schemas.meal_plan_schemas import (
     GenerateMealPlanRequest, MealPlanResponse, MealPlanSummary,
     DayPlanOut, MealSlotOut, WeeklySummaryOut,
     GroceryListOut, GroceryItemOut,

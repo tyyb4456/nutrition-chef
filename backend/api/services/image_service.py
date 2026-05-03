@@ -16,7 +16,7 @@ from db.repositories import ProgressRepository
 from schemas.nutrition_schemas import FoodImageAnalysis, MealLogEntry, NutritionFacts
 from langchain.chat_models import init_chat_model
 from langchain_core.messages import HumanMessage
-from schemas.image_schemas import (
+from api.schemas.image_schemas import (
     AnalyseImageRequest,
     ImageAnalysisResponse,
     IdentifiedFoodItemOut,

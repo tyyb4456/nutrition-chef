@@ -17,12 +17,12 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from dependencies import get_db, get_current_user
-from schemas.meal_plan_schemas import (
+from api.dependencies import get_db, get_current_user
+from api.schemas.meal_plan_schemas import (
     GenerateMealPlanRequest, MealPlanResponse, MealPlanSummary,
     GroceryListOut, PrepScheduleOut,
 )
-from services.meal_plan_service import (
+from api.services.meal_plan_service import (
     generate_meal_plan, get_active_plan, list_user_plans,
 )
 from db.models import User
@@ -134,7 +134,7 @@ def get_plan_by_id(
         )
 
     # Reuse the active plan loader (it works for any plan, not just active)
-    from services.meal_plan_service import _build_plan_from_db
+    from api.services.meal_plan_service import _build_plan_from_db
     plan = _build_plan_from_db(plan_id=plan_id, db=db)
     if not plan:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Plan data not found.")

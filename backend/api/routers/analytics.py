@@ -22,8 +22,8 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from dependencies import get_db, get_current_user
-from schemas.analytics_schemas import (
+from api.dependencies import get_db, get_current_user
+from api.schemas.analytics_schemas import (
     GenerateProgressReportRequest,
     ProgressReportResponse,
     LearnedPreferencesResponse,
@@ -31,7 +31,7 @@ from schemas.analytics_schemas import (
     TriggerLearningRequest,
     TriggerLearningResponse,
 )
-from services.analytics_service import (
+from api.services.analytics_service import (
     generate_progress_report,
     get_learned_preferences,
     update_learned_preferences,

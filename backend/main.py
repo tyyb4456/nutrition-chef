@@ -141,12 +141,16 @@ def create_app() -> FastAPI:
 
 
     # ── Routers ───────────────────────────────────────────────────────────────
-    from api.routers import auth, users, recipes, feedback, analytics
+    from api.routers import auth, users, recipes, feedback, analytics,  meal_plans, meal_logs, images
     app.include_router(auth.router)
     app.include_router(users.router)
     app.include_router(recipes.router)
     app.include_router(feedback.router)
     app.include_router(analytics.router)
+    app.include_router(meal_plans.router)
+    app.include_router(meal_logs.router)
+    app.include_router(images.router)
+
 
 
     # ── Health check ──────────────────────────────────────────────────────────

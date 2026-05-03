@@ -33,7 +33,7 @@ from state import NutritionState
 from nodes.health_goal import health_goal_node
 from nodes.progress import progress_agent_node
 from nodes.learning_loop import learning_loop_node
-from schemas.analytics_schemas import (
+from api.schemas.analytics_schemas import (
     GenerateProgressReportRequest,
     ProgressReportResponse,
     LearnedPreferencesResponse,
