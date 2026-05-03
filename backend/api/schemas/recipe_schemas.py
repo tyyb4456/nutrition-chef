@@ -150,6 +150,8 @@ class FollowupResponse(BaseModel):
     intent == "modify":
       - recipe is populated with the fully regenerated RecipeResponse
       - answer is None
+      - thread_id is populated — pass it to POST /feedback/ to trigger
+        the learning loop for the modified recipe (same flow as initial generate)
 
     intent == "done":
       - answer is a short farewell message
@@ -171,4 +173,12 @@ class FollowupResponse(BaseModel):
     followup_history: list[str] = Field(
         default_factory=list,
         description="Running log of all follow-up turns in this session.",
+    )
+    thread_id: Optional[str] = Field(
+        default=None,
+        description=(
+            "Graph thread ID — only present when intent is 'modify'. "
+            "Pass this to POST /feedback/ as `thread_id` so the learning loop "
+            "runs for the modified recipe (same as the initial generate flow)."
+        ),
     )

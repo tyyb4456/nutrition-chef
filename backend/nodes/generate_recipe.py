@@ -1,7 +1,6 @@
-"""
-agents/recipe_agent.py — Phase 4
+# nodes/generate_recipe.py
 
-"""
+
 
 from __future__ import annotations
 
@@ -191,18 +190,8 @@ def recipe_generator_node(state: NutritionState) -> dict:
     logger.info(f"   {recipe.nutrition.calories} kcal | "
                 f"P:{recipe.nutrition.protein_g}g C:{recipe.nutrition.carbs_g}g F:{recipe.nutrition.fat_g}g")
 
-    # ── 5. Save to PostgreSQL ──────────────────────────────────────────────────
-    saved_recipe_id: str | None = None
-    try:
-        from db.database import get_db
-        from db.repositories import RecipeRepository
-        with get_db() as db:
-            saved_recipe_id = RecipeRepository(db).save(recipe, source="generated")
-        logger.info(f"  🗸   Recipe saved to DB (id: {saved_recipe_id[:8]}...)")
-    except Exception as e:
-        logger.error("  ✗ Could not save recipe to DB (%s).", e)
+    # ── 5. Cache in Redis for 24h ─────────────────────────────────────────────
 
-    # ── 6. Cache in Redis for 24h ─────────────────────────────────────────────
     try:
         from cache.redis_client import redis_client
         redis_client.cache_recipe(
@@ -217,8 +206,7 @@ def recipe_generator_node(state: NutritionState) -> dict:
         logger.error("  ✗ Could not cache recipe in Redis (%s).", e)
 
     return {
-        "generated_recipe":  recipe,
-        "recipe_generated":  True,
-        "recipe_context":    contexts,
-        "current_recipe_id": saved_recipe_id,  # passed to feedback_agent
+        "generated_recipe": recipe,
+        "recipe_generated": True,
+        "recipe_context":   contexts,
     }

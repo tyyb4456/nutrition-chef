@@ -94,9 +94,10 @@ def _resume_graph_for_learning(
 ) -> bool:
     """
     Resume the paused nutrition_graph thread so that:
-      feedback_node  — receives resume value, marks feedback_collected=True
-      learning_loop_node — runs, updates learned preferences in DB
+      feedback_node      — receives resume value, marks feedback_collected=True
+      learning_loop_node — runs, updates learned preferences in DB + ChromaDB
 
+    Both generate (gen-) and modify (mod-) threads live in nutrition_graph.
     Returns True on success, False on any error.
     """
     try:
@@ -105,18 +106,15 @@ def _resume_graph_for_learning(
 
         config = {"configurable": {"thread_id": thread_id}}
 
-        # Verify the thread is actually paused (not expired / unknown)
         snapshot = nutrition_graph.get_state(config)
         if snapshot is None:
             logger.warning(
-                "Graph thread '%s' not found in checkpointer — "
-                "learning loop skipped.", thread_id,
+                "Graph thread '%s' not found in checkpointer — learning loop skipped.",
+                thread_id,
             )
             return False
 
-        logger.info(
-            "Resuming graph thread '%s' with feedback (rating=%d).", thread_id, rating,
-        )
+        logger.info("Resuming thread '%s' with feedback (rating=%d).", thread_id, rating)
 
         nutrition_graph.invoke(
             Command(resume={"rating": rating, "comment": comment or ""}),
@@ -128,9 +126,7 @@ def _resume_graph_for_learning(
         return True
 
     except Exception as exc:
-        logger.error(
-            "   ✗  Failed to resume graph thread '%s': %s", thread_id, exc,
-        )
+        logger.error("   ✗  Failed to resume thread '%s': %s", thread_id, exc)
         return False
 
 

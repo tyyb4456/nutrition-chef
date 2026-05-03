@@ -27,13 +27,23 @@ llm   = model.with_structured_output(LearnedPreferences)
 LEARNING_PROMPT = ChatPromptTemplate.from_template("""
 You are a behavioral nutritionist and learning agent.
 
-Analyze this user's feedback. Extract structured preference updates.
+Analyze this user's feedback and any explicit modification they requested.
+Extract structured preference updates.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
  FEEDBACK
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Rating:  {rating} / 5
 Comment: {comment}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ EXPLICIT MODIFICATION REQUEST (strongest signal)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+{modification_request}
+
+If a modification was requested (e.g. "make it vegan", "reduce calories",
+"use Indian spices"), treat it as a DIRECT, high-confidence preference
+statement — more reliable than a comment alone.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
  CURRENT PROFILE
@@ -66,19 +76,29 @@ Merge with existing preferences. Return empty lists (not null) if no data.
 
 
 def learning_loop_node(state: NutritionState) -> dict:
-    logger.info("\n Learning from feedback...")
+    logger.info("\n⏳ Learning from feedback...")
 
     existing = state.learned_preferences
+
+    # If a followup modification was made (e.g. "make it vegan"), include it as
+    # a high-confidence explicit signal alongside the rating/comment.
+    modification = state.followup_modification
+    modification_text = (
+        f"User explicitly requested: \"{modification}\""
+        if modification
+        else "No explicit modification requested this session."
+    )
 
     messages = LEARNING_PROMPT.format_messages(
         rating=state.feedback_rating or "N/A",
         comment=state.feedback_comment or "No comment.",
+        modification_request=modification_text,
         goal=state.fitness_goal or "not specified",
         cuisine=state.preferences.get("cuisine", "any"),
         spice=state.preferences.get("spice_level", "medium"),
-        prev_liked=", ".join(existing.liked_ingredients)   if existing else "none",
+        prev_liked=", ".join(existing.liked_ingredients)    if existing else "none",
         prev_disliked=", ".join(existing.disliked_ingredients) if existing else "none",
-        prev_insights="; ".join(existing.session_insights) if existing else "none",
+        prev_insights="; ".join(existing.session_insights)  if existing else "none",
     )
 
     new_prefs: LearnedPreferences = llm.invoke(messages)

@@ -1,43 +1,5 @@
-"""
-pipeline/nutrition_graph.py
+# pipeline/nutrition_graph.py
 
-Compiled LangGraph StateGraph with a PostgreSQL checkpointer.
-
-Checkpointer:
-  Uses PostgresSaver (langgraph-checkpoint-postgres) backed by a
-  psycopg v3 ConnectionPool.  Thread states survive server restarts,
-  so a POST /feedback/ can resume a graph thread from the previous
-  POST /recipes/generate even after a process restart.
-
-  Connection pool reads DATABASE_URL from the environment (same DB
-  as the rest of the app — LangGraph creates its own checkpoint
-  tables via checkpointer.setup()).
-
-Graph topology:
-  START → health_goal → recipe_generator → nutrition_validation
-            ├─(pass / max-retries)──────────────────────▶ substitution
-            └─(fail + retries < 2)──▶ macro_adjustment
-                         └─▶ bump_retries ──▶ nutrition_validation (loop)
-
-  substitution → explainability → feedback_node  ← interrupt() fires here
-                                        └─▶ learning_loop → END
-
-Usage — Phase 1 (generate):
-    from pipeline.nutrition_graph import nutrition_graph
-    import uuid
-
-    config = {"configurable": {"thread_id": str(uuid.uuid4())}}
-    result = nutrition_graph.invoke(state, config=config, version="v2")
-    # result.interrupts → interrupt payload from feedback_node
-
-Usage — Phase 2 (resume after feedback):
-    from langgraph.types import Command
-    nutrition_graph.invoke(
-        Command(resume={"rating": 4, "comment": "Loved it!"}),
-        config=config,
-        version="v2",
-    )
-"""
 
 from __future__ import annotations
 
@@ -86,10 +48,10 @@ _pool = ConnectionPool(
 
 try:
     _pool.open(wait=True, timeout=10)
-    logger.info("psycopg_pool opened — %d connection(s) ready.", _pool.get_stats().get("pool_min", 0))
+    logger.info(" 🗸  psycopg_pool opened — %d connection(s) ready.", _pool.get_stats().get("pool_min", 0))
 except Exception as _pool_err:
     logger.error(
-        "Could not open PostgreSQL connection pool for checkpointer: %s. "
+        "  ✗ Could not open PostgreSQL connection pool for checkpointer: %s. "
         "Falling back to MemorySaver.", _pool_err,
     )
     _pool = None  # type: ignore[assignment]
@@ -187,11 +149,11 @@ def _make_checkpointer():
         try:
             cp = PostgresSaver(_pool)
             cp.setup()   # idempotent — safe to call on every startup
-            logger.info("LangGraph checkpointer: PostgresSaver (Railway PostgreSQL)")
+            logger.info("   🗸   LangGraph checkpointer: PostgresSaver (Railway PostgreSQL)")
             return cp
         except Exception as e:
             logger.error(
-                "PostgresSaver.setup() failed: %s — falling back to MemorySaver.", e,
+                "  ✗  PostgresSaver.setup() failed: %s — falling back to MemorySaver.", e,
             )
 
     from langgraph.checkpoint.memory import MemorySaver
@@ -205,6 +167,7 @@ _checkpointer = _make_checkpointer()
 nutrition_graph = _build_graph().compile(checkpointer=_checkpointer)
 
 logger.info("nutrition_graph compiled successfully.")
+
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -224,4 +187,4 @@ def close_pool() -> None:
     """
     if _pool is not None and not _pool.closed:
         _pool.close()
-        logger.info("psycopg_pool closed.")
+        logger.info("   🗸    psycopg_pool closed.")
