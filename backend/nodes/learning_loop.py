@@ -1,12 +1,5 @@
-"""
-nodes/learning_loop.py — Phase 4
+# nodes/learning_loop.py
 
-Phase 4 upgrade:
-- Persists updated LearnedPreferences to PostgreSQL + ChromaDB
-  via memory/progress_store.save_learned_preferences()
-- Also saves goal updates back to user_goals table if goal changed
-- All Phase 3 structured output + merge logic preserved
-"""
 
 from __future__ import annotations
 
@@ -31,13 +24,13 @@ Analyze this user's feedback and any explicit modification they requested.
 Extract structured preference updates.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- FEEDBACK
+FEEDBACK
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Rating:  {rating} / 5
 Comment: {comment}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- EXPLICIT MODIFICATION REQUEST (strongest signal)
+EXPLICIT MODIFICATION REQUEST (strongest signal)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 {modification_request}
 
@@ -45,38 +38,62 @@ If a modification was requested (e.g. "make it vegan", "reduce calories",
 "use Indian spices"), treat it as a DIRECT, high-confidence preference
 statement — more reliable than a comment alone.
 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 
+RECIPE DETAILS (for high-rating inference)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- CURRENT PROFILE
+Dish: {dish_name}
+Cuisine: {cuisine}
+Key Ingredients: {key_ingredients}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+👤 CURRENT PROFILE
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Fitness goal: {goal}
-Cuisine preference: {cuisine}
+Cuisine preference: {cuisine_pref}
 Spice preference: {spice}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- EXISTING PREFERENCES
+EXISTING PREFERENCES
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Previously liked: {prev_liked}
 Previously disliked: {prev_disliked}
 Previous insights: {prev_insights}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- TASK
+TASK
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Extract:
-1. liked_ingredients — ingredients user enjoyed
-2. disliked_ingredients — ingredients to avoid
-3. preferred_textures — e.g. crispy, soft
-4. preferred_cuisines / avoided_cuisines
-5. spice_preference — if mentioned
-6. goal_refinement — if feedback suggests goal has evolved
-7. session_insights — 1-2 short bullet insights
+1. **liked_ingredients** — ingredients user enjoyed
+   - If rating ≥ 4 stars AND comment is positive/generic (e.g. "loved it", "great", "delicious"),
+     extract 2-3 KEY ingredients from the recipe above (main proteins, distinctive spices)
+   - If comment mentions specific ingredients, prioritize those
+   - If rating < 3 stars, leave empty
+
+2. **disliked_ingredients** — ingredients to avoid
+   - Extract from negative comments or low ratings (< 3 stars)
+   - If modification requested "remove X", add X here
+
+3. **preferred_textures** — e.g. crispy, soft, creamy
+
+4. **preferred_cuisines** / **avoided_cuisines**
+   - If rating ≥ 4 for a cuisine, add to preferred_cuisines
+   - If rating ≤ 2, add to avoided_cuisines
+
+5. **spice_preference** — if mentioned (mild / medium / hot)
+
+6. **goal_refinement** — if feedback suggests goal has evolved
+
+7. **session_insights** — 1-2 short bullet insights about this session
+
+**CRITICAL**: For ratings ≥ 4 with positive/generic comments like "loved it", "great meal", 
+"enjoyed this", extract liked ingredients FROM THE RECIPE — don't leave liked_ingredients empty!
 
 Merge with existing preferences. Return empty lists (not null) if no data.
 """)
 
 
 def learning_loop_node(state: NutritionState) -> dict:
-    logger.info("\n⏳ Learning from feedback...")
+    logger.info("\n 🗸  Learning from feedback...")
 
     existing = state.learned_preferences
 
@@ -89,12 +106,27 @@ def learning_loop_node(state: NutritionState) -> dict:
         else "No explicit modification requested this session."
     )
 
+    # Extract recipe details for high-rating inference
+    recipe = state.final_recipe
+    dish_name = recipe.dish_name if recipe else "Unknown dish"
+    cuisine = recipe.cuisine if recipe else "unspecified"
+    
+    # Get key ingredients (first 5 for context)
+    key_ingredients = "not available"
+    if recipe and recipe.ingredients:
+        key_ingredients = ", ".join([
+            ing.name for ing in recipe.ingredients[:5]
+        ])
+
     messages = LEARNING_PROMPT.format_messages(
         rating=state.feedback_rating or "N/A",
         comment=state.feedback_comment or "No comment.",
         modification_request=modification_text,
+        dish_name=dish_name,
+        cuisine=cuisine,
+        key_ingredients=key_ingredients,
         goal=state.fitness_goal or "not specified",
-        cuisine=state.preferences.get("cuisine", "any"),
+        cuisine_pref=state.preferences.get("cuisine", "any"),
         spice=state.preferences.get("spice_level", "medium"),
         prev_liked=", ".join(existing.liked_ingredients)    if existing else "none",
         prev_disliked=", ".join(existing.disliked_ingredients) if existing else "none",
@@ -125,7 +157,7 @@ def learning_loop_node(state: NutritionState) -> dict:
         save_learned_preferences(user_id, merged)
         logger.info("   🗸  Learned preferences saved to DB.")
     except Exception as e:
-        logger.error("  ✗  Could not persist learned preferences (%s).", e)
+        logger.error("   ✗ Could not persist learned preferences (%s).", e)
 
     # ── If goal changed, record a new user_goal row ───────────────────────────
     if merged.goal_refinement and state.customer_id and state.macro_split:
@@ -139,14 +171,15 @@ def learning_loop_node(state: NutritionState) -> dict:
                     calorie_target=state.calorie_target,
                     goal_type=state.goal_type or "maintenance",
                 )
-            logger.info("  🗸  Updated goal saved to DB.")
+            logger.info("   ✓ Updated goal saved to DB.")
         except Exception as e:
-            logger.error("  ✗  Could not save updated goal to DB (%s).", e)
+            logger.error("   ✗ Could not save updated goal to DB (%s).", e)
 
-    logger.info(f"   🗸  Preferences updated.")
-    if merged.liked_ingredients:    logger.info (f"      Likes: {', '.join(merged.liked_ingredients)}")
-    if merged.disliked_ingredients: logger.info(f"      Dislikes: {', '.join(merged.disliked_ingredients)}")
-    if merged.goal_refinement:      logger.info(f"      Goal: {merged.goal_refinement}")
+    logger.info(f"   ✓ Preferences updated.")
+    if merged.liked_ingredients:    logger.info(f"      ✓ Likes: {', '.join(merged.liked_ingredients)}")
+    if merged.disliked_ingredients: logger.info(f"      ✗ Dislikes: {', '.join(merged.disliked_ingredients)}")
+    if merged.preferred_cuisines:   logger.info(f"      🌍 Preferred cuisines: {', '.join(merged.preferred_cuisines)}")
+    if merged.goal_refinement:      logger.info(f"      🎯 Goal: {merged.goal_refinement}")
 
     return {
         "learned_preferences": merged,

@@ -49,6 +49,11 @@ LEARNED PREFERENCES (from past sessions)
 {learned_preferences_text}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+MODIFICATION REQUEST (PRIORITY INSTRUCTION)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+{modification_instruction}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 REFERENCE EXAMPLES (use as inspiration, not copies)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 {recipe_context}
@@ -64,6 +69,7 @@ REQUIREMENTS
 6. Include fiber-rich ingredients (aim for 5–8g fiber minimum)
 7. Accessible ingredients, realistic home cook steps
 8. If learned preferences exist, honour liked/disliked ingredients
+9. **IF MODIFICATION REQUEST EXISTS, APPLY IT PRECISELY**
 
 Return a complete recipe: dish name, ingredients with quantities,
 numbered steps, and full nutritional breakdown including fiber.
@@ -89,15 +95,15 @@ def _format_medical_notes(conditions) -> str:
     if not conditions:
         return "No medical conditions."
     condition_map = {
-        "diabetes":            " Diabetic: use low-GI carbs, avoid refined sugar.",
-        "hypertension":        " Hypertension: keep sodium BELOW 600mg per meal.",
-        "celiac":              " Celiac: absolutely NO gluten.",
-        "lactose_intolerance": " Lactose intolerant: no dairy. Use plant-based alternatives.",
-        "kidney_disease":      " Kidney disease: limit protein, reduce phosphorus.",
-        "heart_disease":       " Heart disease: low saturated fat, low sodium.",
-        "ibs":                 " IBS: avoid high-FODMAP foods.",
-        "anemia":              " Anemia: include iron-rich foods.",
-        "osteoporosis":        " Osteoporosis: include calcium-rich foods.",
+        "diabetes":            "⚕ Diabetic: use low-GI carbs, avoid refined sugar.",
+        "hypertension":        "⚕ Hypertension: keep sodium BELOW 600mg per meal.",
+        "celiac":              "⚕ Celiac: absolutely NO gluten.",
+        "lactose_intolerance": "⚕ Lactose intolerant: no dairy. Use plant-based alternatives.",
+        "kidney_disease":      "⚕ Kidney disease: limit protein, reduce phosphorus.",
+        "heart_disease":       "⚕ Heart disease: low saturated fat, low sodium.",
+        "ibs":                 "⚕ IBS: avoid high-FODMAP foods.",
+        "anemia":              "⚕ Anemia: include iron-rich foods.",
+        "osteoporosis":        "⚕ Osteoporosis: include calcium-rich foods.",
     }
     notes = [condition_map[c.condition] for c in conditions if c.condition in condition_map]
     return "\n".join(notes) if notes else "No specific medical dietary restrictions."
@@ -107,52 +113,58 @@ def _format_learned_preferences(lp) -> str:
     if lp is None:
         return "No previous session data available."
     lines = []
-    if lp.liked_ingredients:     lines.append(f" Likes: {', '.join(lp.liked_ingredients)}")
-    if lp.disliked_ingredients:  lines.append(f" Dislikes: {', '.join(lp.disliked_ingredients)}")
-    if lp.preferred_textures:    lines.append(f" Textures: {', '.join(lp.preferred_textures)}")
-    if lp.spice_preference:      lines.append(f" Spice: {lp.spice_preference}")
-    if lp.session_insights:      lines.append(f" Notes: {'; '.join(lp.session_insights)}")
+    if lp.liked_ingredients:     lines.append(f" 🗸  Likes: {', '.join(lp.liked_ingredients)}")
+    if lp.disliked_ingredients:  lines.append(f" ✗  Dislikes: {', '.join(lp.disliked_ingredients)}")
+    if lp.preferred_textures:    lines.append(f" 🍽 Textures: {', '.join(lp.preferred_textures)}")
+    if lp.spice_preference:      lines.append(f" 🌶 Spice: {lp.spice_preference}")
+    if lp.session_insights:      lines.append(f"Notes: {'; '.join(lp.session_insights)}")
     return "\n".join(lines) if lines else "No specific preferences learned yet."
 
 
 # ── Agent Node ────────────────────────────────────────────────────────────────
 
 def recipe_generator_node(state: NutritionState) -> dict:
-    logger.info("\n Generating personalized recipe...")
+    logger.info("\n   🗸   Generating personalized recipe...")
 
     macro     = state.macro_split
     cuisine   = state.preferences.get("cuisine", "any")
     goal_type = state.goal_type or "maintenance"
     user_id   = state.customer_id or state.name or "anonymous"
 
-    # ── 1. Check Redis cache ──────────────────────────────────────────────────
-    try:
-        from cache.redis_client import redis_client
-        allowed, count = redis_client.check_rate_limit(user_id)
-        if not allowed:
-            logger.warning(f"    Rate limit reached ({count} calls this hour). Using cached or default recipe.")
+    # ── 1. Check Redis cache (SKIP if modification request) ───────────────────
+    is_modification = bool(state.followup_modification)
+    
+    if is_modification:
+        logger.info("   🗸   Modification request detected — skipping cache to generate fresh recipe.")
+        logger.info(f"      Instruction: {state.followup_modification[:100]}...")
+    else:
+        try:
+            from cache.redis_client import redis_client
+            allowed, count = redis_client.check_rate_limit(user_id)
+            if not allowed:
+                logger.warning(f"   ⚠ Rate limit reached ({count} calls this hour). Using cached or default recipe.")
 
-        cached = redis_client.get_cached_recipe(
-            user_id=user_id,
-            goal_type=goal_type,
-            calorie_target=state.calorie_target,
-            cuisine=cuisine,
-            allergies=state.allergies,
-        )
-        if cached:
-            logger.info("    Cache HIT — returning cached recipe.")
-            recipe = RecipeOutput(**cached)
-            return {
-                "generated_recipe": recipe,
-                "recipe_generated": True,
-                "recipe_context":   [],
-            }
-    except Exception as e:
-        logger.warning("Redis check failed (%s). Proceeding without cache.", e)
+            cached = redis_client.get_cached_recipe(
+                user_id=user_id,
+                goal_type=goal_type,
+                calorie_target=state.calorie_target,
+                cuisine=cuisine,
+                allergies=state.allergies,
+            )
+            if cached:
+                logger.info("   ✓   Cache HIT — returning cached recipe.")
+                recipe = RecipeOutput(**cached)
+                return {
+                    "generated_recipe": recipe,
+                    "recipe_generated": True,
+                    "recipe_context":   [],
+                }
+        except Exception as e:
+            logger.warning("   ⚠ Redis check failed (%s). Proceeding without cache.", e)
 
     # ── 2. Retrieve RAG context ───────────────────────────────────────────────
     contexts = retrieve_context(goal_type=goal_type, cuisine=cuisine, n=2)
-    logger.info(f"   Injecting {len(contexts)} reference recipe(s) as context")
+    logger.info(f"   🗸   Injecting {len(contexts)} reference recipe(s) as context")
 
     # ── 3. Build prompt ───────────────────────────────────────────────────────
     age_profile   = state.age_profile
@@ -160,7 +172,14 @@ def recipe_generator_node(state: NutritionState) -> dict:
     age_notes     = age_profile.notes     if age_profile else "Standard adult guidelines."
     conditions_str = ", ".join(c.condition for c in state.medical_conditions) if state.medical_conditions else "none"
 
-    logger.info(f"   learned preference till now   :\n{state.learned_preferences}" )
+    # Format modification instruction
+    modification_text = (
+        f"**APPLY THIS MODIFICATION**: {state.followup_modification}"
+        if is_modification
+        else "No modification requested — generate a standard recipe following the profile above."
+    )
+
+    logger.info(f"   🗸   Learned preferences: {_format_learned_preferences(state.learned_preferences)[:80]}...")
 
     messages = RECIPE_PROMPT.format_messages(
         age=state.age or "not specified",
@@ -178,32 +197,34 @@ def recipe_generator_node(state: NutritionState) -> dict:
         age_notes=age_notes,
         medical_notes=_format_medical_notes(state.medical_conditions),
         learned_preferences_text=_format_learned_preferences(state.learned_preferences),
+        modification_instruction=modification_text,
         recipe_context=_format_recipe_context(contexts),
     )
-
-
 
     # ── 4. LLM call ───────────────────────────────────────────────────────────
     recipe: RecipeOutput = llm.invoke(messages)
 
-    logger.info(f" Recipe generated: '{recipe.dish_name}'")
-    logger.info(f"   {recipe.nutrition.calories} kcal | "
+    logger.info(f"   🗸   Recipe generated: '{recipe.dish_name}'")
+    logger.info(f"      {recipe.nutrition.calories} kcal | "
                 f"P:{recipe.nutrition.protein_g}g C:{recipe.nutrition.carbs_g}g F:{recipe.nutrition.fat_g}g")
 
-    # ── 5. Cache in Redis for 24h ─────────────────────────────────────────────
-
-    try:
-        from cache.redis_client import redis_client
-        redis_client.cache_recipe(
-            recipe_dict=recipe.model_dump(),
-            user_id=user_id,
-            goal_type=goal_type,
-            calorie_target=state.calorie_target,
-            cuisine=cuisine,
-            allergies=state.allergies,
-        )
-    except Exception as e:
-        logger.error("  ✗ Could not cache recipe in Redis (%s).", e)
+    # ── 5. Cache in Redis for 24h (ONLY if not a modification) ────────────────
+    if not is_modification:
+        try:
+            from cache.redis_client import redis_client
+            redis_client.cache_recipe(
+                recipe_dict=recipe.model_dump(),
+                user_id=user_id,
+                goal_type=goal_type,
+                calorie_target=state.calorie_target,
+                cuisine=cuisine,
+                allergies=state.allergies,
+            )
+            logger.info("   🗸   Recipe cached for 24h")
+        except Exception as e:
+            logger.warning("   ⚠ Could not cache recipe in Redis (%s).", e)
+    else:
+        logger.info("   🗸   Modification — skipping cache write")
 
     return {
         "generated_recipe": recipe,
