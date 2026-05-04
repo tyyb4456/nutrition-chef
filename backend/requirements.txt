@@ -31,3 +31,6 @@ pydantic[email]
 langgraph-checkpoint-postgres
 
 python-multipart
+
+faiss-cpu
+langchain-community

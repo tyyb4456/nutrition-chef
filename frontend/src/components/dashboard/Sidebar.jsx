@@ -1,7 +1,7 @@
 import { NavLink, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard, CalendarDays, ChefHat,
-  ClipboardList, BarChart2, User, LogOut, Leaf,
+  ClipboardList, BarChart2, User, LogOut, Leaf, Camera,
 } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
 import ThemeToggle from '../ui/ThemeToggle'
@@ -11,6 +11,7 @@ const navItems = [
   { to: '/dashboard/meal-plan', icon: CalendarDays,    label: 'Meal Plan' },
   { to: '/dashboard/recipes',   icon: ChefHat,         label: 'Recipes' },
   { to: '/dashboard/logs',      icon: ClipboardList,   label: 'Meal Logs' },
+  { to: '/dashboard/scan',      icon: Camera,          label: 'Scan Food' },
   { to: '/dashboard/analytics', icon: BarChart2,       label: 'Analytics' },
   { to: '/dashboard/profile',   icon: User,            label: 'Profile' },
 ]

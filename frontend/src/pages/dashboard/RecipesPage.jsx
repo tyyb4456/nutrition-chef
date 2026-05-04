@@ -1,14 +1,204 @@
-import { useEffect, useState } from 'react'
-import { ChefHat, Plus, X, Loader, Clock, Flame, Beef, Wheat, ChevronRight } from 'lucide-react'
+import { useEffect, useState, useCallback } from 'react'
+import { ChefHat, Plus, X, Loader, Clock, Flame, Beef, Wheat, ChevronRight, Star, Trash2, CheckCircle, Brain } from 'lucide-react'
 import { recipeService } from '../../services/recipeService'
-import { useAuth } from '../../context/AuthContext'
+import { feedbackService } from '../../services/feedbackService'
 import EmptyState from '../../components/dashboard/EmptyState'
 
-const MEAL_TYPES = ['breakfast', 'lunch', 'dinner', 'snack']
-const CUISINES   = ['any', 'italian', 'mexican', 'asian', 'mediterranean', 'indian', 'american', 'pakistani']
+const MEAL_TYPES  = ['breakfast', 'lunch', 'dinner', 'snack']
+const CUISINES    = ['any', 'italian', 'mexican', 'asian', 'mediterranean', 'indian', 'american', 'pakistani']
+const SPICE_LEVELS = ['mild', 'medium', 'hot']
 
+function getCalories(r)  { return r.calories  ?? r.nutrition?.calories }
+function getProtein(r)   { return r.protein_g  ?? r.nutrition?.protein_g }
+function getCarbs(r)     { return r.carbs_g    ?? r.nutrition?.carbs_g }
+function getFat(r)       { return r.fat_g      ?? r.nutrition?.fat_g }
+
+/* ── Star picker ─────────────────────────────────────────────────────────── */
+function StarPicker({ value, onChange, disabled }) {
+  const [hover, setHover] = useState(0)
+  return (
+    <div className="flex gap-1">
+      {[1, 2, 3, 4, 5].map(n => (
+        <button
+          key={n}
+          type="button"
+          disabled={disabled}
+          onClick={() => onChange(n)}
+          onMouseEnter={() => setHover(n)}
+          onMouseLeave={() => setHover(0)}
+          className="cursor-pointer disabled:cursor-default transition-transform hover:scale-110"
+        >
+          <Star
+            size={22}
+            className={`transition-colors ${
+              n <= (hover || value)
+                ? 'fill-amber-400 text-amber-400'
+                : 'text-cyprus/20 dark:text-sand/20'
+            }`}
+            strokeWidth={1.5}
+          />
+        </button>
+      ))}
+    </div>
+  )
+}
+
+/* ── Feedback panel (inside detail drawer) ───────────────────────────────── */
+function FeedbackPanel({ recipeId, threadId }) {
+  const [existing,    setExisting]    = useState(null)   // already-submitted feedback
+  const [loadingFb,   setLoadingFb]   = useState(true)
+  const [rating,      setRating]      = useState(0)
+  const [comment,     setComment]     = useState('')
+  const [submitting,  setSubmitting]  = useState(false)
+  const [submitted,   setSubmitted]   = useState(false)
+  const [loopRan,     setLoopRan]     = useState(false)
+  const [error,       setError]       = useState('')
+  const [deleting,    setDeleting]    = useState(false)
+
+  // Load existing feedback for this recipe
+  useEffect(() => {
+    if (!recipeId) return
+    setLoadingFb(true)
+    feedbackService.listForRecipe(recipeId)
+      .then(res => {
+        const fb = res?.feedback?.[0] ?? null
+        setExisting(fb)
+        if (fb) { setRating(fb.rating); setComment(fb.comment ?? '') }
+      })
+      .catch(() => {})
+      .finally(() => setLoadingFb(false))
+  }, [recipeId])
+
+  const handleSubmit = async (e) => {
+    e.preventDefault()
+    if (!rating) { setError('Please choose a star rating.'); return }
+    setSubmitting(true)
+    setError('')
+    try {
+      const res = await feedbackService.submit({
+        recipe_id: recipeId,
+        rating,
+        comment: comment.trim() || undefined,
+        thread_id: threadId ?? undefined,
+      })
+      setExisting(res)
+      setSubmitted(true)
+      setLoopRan(res.learning_loop_triggered)
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const handleDelete = async () => {
+    if (!existing?.feedback_id) return
+    setDeleting(true)
+    try {
+      await feedbackService.delete(existing.feedback_id)
+      setExisting(null)
+      setRating(0)
+      setComment('')
+      setSubmitted(false)
+      setLoopRan(false)
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setDeleting(false)
+    }
+  }
+
+  if (loadingFb) {
+    return (
+      <div className="flex justify-center py-4">
+        <Loader size={16} className="animate-spin text-cyprus/30 dark:text-sand/30" />
+      </div>
+    )
+  }
+
+  // Success state
+  if (submitted || existing) {
+    return (
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="flex gap-1">
+            {[1,2,3,4,5].map(n => (
+              <Star
+                key={n}
+                size={18}
+                className={n <= (existing?.rating ?? rating) ? 'fill-amber-400 text-amber-400' : 'text-cyprus/15 dark:text-sand/15'}
+                strokeWidth={1.5}
+              />
+            ))}
+          </div>
+          <button
+            onClick={handleDelete}
+            disabled={deleting}
+            className="flex items-center gap-1 text-xs text-cyprus/40 dark:text-sand/40 hover:text-red-500 dark:hover:text-red-400 transition-colors cursor-pointer disabled:opacity-50"
+          >
+            {deleting ? <Loader size={12} className="animate-spin" /> : <Trash2 size={12} />}
+            Remove
+          </button>
+        </div>
+        {(existing?.comment || comment) && (
+          <p className="text-sm text-cyprus/70 dark:text-sand/70 italic">
+            "{existing?.comment ?? comment}"
+          </p>
+        )}
+        <div className="flex items-center gap-2 text-xs">
+          <CheckCircle size={13} className="text-green-500" />
+          <span className="text-green-600 dark:text-green-400 font-medium">Feedback saved</span>
+          {loopRan && (
+            <>
+              <span className="text-cyprus/30 dark:text-sand/30">·</span>
+              <Brain size={13} className="text-cyan-500" />
+              <span className="text-cyan-600 dark:text-cyan-400 font-medium">Learning loop ran</span>
+            </>
+          )}
+        </div>
+        {error && <p className="text-xs text-red-500">{error}</p>}
+      </div>
+    )
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-3">
+      <StarPicker value={rating} onChange={setRating} disabled={submitting} />
+      <textarea
+        value={comment}
+        onChange={e => setComment(e.target.value)}
+        placeholder="Any thoughts? (optional)"
+        rows={2}
+        maxLength={1000}
+        disabled={submitting}
+        className="w-full bg-sand dark:bg-cyprus border border-cyprus/15 dark:border-sand/15 text-cyprus dark:text-sand rounded-xl px-3 py-2.5 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-cyprus/20 dark:focus:ring-sand/20 placeholder:text-cyprus/30 dark:placeholder:text-sand/30 disabled:opacity-60"
+      />
+      {error && <p className="text-xs text-red-500">{error}</p>}
+      <button
+        type="submit"
+        disabled={submitting || !rating}
+        className="inline-flex items-center gap-2 bg-cyprus dark:bg-sand text-sand dark:text-cyprus text-xs font-bold px-4 py-2 rounded-xl disabled:opacity-50 cursor-pointer hover:bg-cyprus-light dark:hover:bg-sand-dark transition-all"
+      >
+        {submitting
+          ? <><Loader size={12} className="animate-spin" /> Submitting…</>
+          : <><Star size={12} /> Submit Feedback</>
+        }
+      </button>
+      {threadId && (
+        <p className="text-[10px] text-cyprus/35 dark:text-sand/35">
+          Your rating will help the AI learn your preferences for future recipes.
+        </p>
+      )}
+    </form>
+  )
+}
+
+/* ── Recipe card ─────────────────────────────────────────────────────────── */
 function RecipeCard({ recipe, onClick }) {
-  const n = recipe.nutrition ?? {}
+  const cal  = getCalories(recipe)
+  const pro  = getProtein(recipe)
+  const carb = getCarbs(recipe)
+
   return (
     <button
       onClick={() => onClick(recipe)}
@@ -16,25 +206,25 @@ function RecipeCard({ recipe, onClick }) {
     >
       <div className="p-5">
         <div className="flex items-start justify-between gap-2 mb-3">
-          <div>
+          <div className="min-w-0">
             <span className="text-[10px] font-bold uppercase tracking-wider text-cyprus/40 dark:text-sand/40">
               {recipe.meal_type}
             </span>
-            <h3 className="font-display font-bold text-sm text-cyprus dark:text-sand leading-tight mt-0.5">
-              {recipe.name}
+            <h3 className="font-display font-bold text-sm text-cyprus dark:text-sand leading-tight mt-0.5 line-clamp-2">
+              {recipe.dish_name}
             </h3>
           </div>
           <ChevronRight size={16} className="text-cyprus/30 dark:text-sand/30 shrink-0 mt-1 group-hover:translate-x-0.5 transition-transform" />
         </div>
         <div className="grid grid-cols-4 gap-1.5">
           {[
-            { icon: Flame,  val: n.calories,   unit: 'kcal' },
-            { icon: Beef,   val: n.protein_g ? `${Math.round(n.protein_g)}g` : '—', unit: 'pro' },
-            { icon: Wheat,  val: n.carbs_g   ? `${Math.round(n.carbs_g)}g`   : '—', unit: 'carb' },
-            { icon: Clock,  val: recipe.prep_time_minutes ? `${recipe.prep_time_minutes}m` : '—', unit: 'prep' },
+            { icon: Flame, val: cal  != null ? cal                          : '—', unit: 'kcal' },
+            { icon: Beef,  val: pro  != null ? `${Math.round(pro)}g`        : '—', unit: 'pro'  },
+            { icon: Wheat, val: carb != null ? `${Math.round(carb)}g`       : '—', unit: 'carb' },
+            { icon: Clock, val: recipe.prep_time_minutes ? `${recipe.prep_time_minutes}m` : '—', unit: 'prep' },
           ].map(({ icon: Icon, val, unit }) => (
             <div key={unit} className="bg-sand dark:bg-cyprus rounded-lg p-1.5 text-center">
-              <div className="text-[11px] font-bold text-cyprus dark:text-sand">{val ?? '—'}</div>
+              <div className="text-[11px] font-bold text-cyprus dark:text-sand">{val}</div>
               <div className="text-[9px] text-cyprus/40 dark:text-sand/40">{unit}</div>
             </div>
           ))}
@@ -49,84 +239,161 @@ function RecipeCard({ recipe, onClick }) {
   )
 }
 
-function RecipeDetail({ recipe, onClose }) {
-  const n = recipe.nutrition ?? {}
-  const steps = Array.isArray(recipe.steps) ? recipe.steps : []
-  const ingredients = recipe.ingredients ?? []
+/* ── Recipe detail drawer ────────────────────────────────────────────────── */
+function RecipeDetail({ recipeId, initialRecipe, onClose }) {
+  const [recipe,  setRecipe]  = useState(initialRecipe)
+  const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    const id = recipeId ?? initialRecipe?.recipe_id
+    if (!id) return
+    const hasFullData = initialRecipe?.ingredients?.length > 0 || initialRecipe?.steps?.length > 0
+    if (hasFullData) { setRecipe(initialRecipe); return }
+    setLoading(true)
+    recipeService.getById(id)
+      .then(r => setRecipe(r))
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [recipeId])
+
+  const n    = recipe?.nutrition ?? {}
+  const steps = Array.isArray(recipe?.steps)       ? recipe.steps       : []
+  const ingr  = Array.isArray(recipe?.ingredients) ? recipe.ingredients : []
+  const cal   = getCalories(recipe)
+  const pro   = getProtein(recipe)
+  const carb  = getCarbs(recipe)
+  const fat   = getFat(recipe)
 
   return (
     <div className="fixed inset-0 z-50 flex">
       <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
       <div className="relative ml-auto w-full max-w-lg h-full bg-sand dark:bg-cyprus overflow-y-auto shadow-2xl">
+
+        {/* Header */}
         <div className="sticky top-0 bg-sand dark:bg-cyprus border-b border-cyprus/10 dark:border-sand/10 px-5 py-4 flex items-center justify-between z-10">
-          <h2 className="font-display font-bold text-cyprus dark:text-sand truncate pr-4">{recipe.name}</h2>
+          <h2 className="font-display font-bold text-cyprus dark:text-sand truncate pr-4">
+            {recipe?.dish_name ?? '…'}
+          </h2>
           <button onClick={onClose} className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-cyprus/10 dark:hover:bg-sand/10 transition-colors cursor-pointer shrink-0">
             <X size={18} className="text-cyprus dark:text-sand" />
           </button>
         </div>
-        <div className="p-5 space-y-5">
-          {/* Nutrition */}
-          <div className="grid grid-cols-4 gap-2">
-            {[
-              { label: 'Calories', val: n.calories, unit: 'kcal' },
-              { label: 'Protein',  val: n.protein_g  ? `${Math.round(n.protein_g)}g`  : '—', unit: '' },
-              { label: 'Carbs',    val: n.carbs_g    ? `${Math.round(n.carbs_g)}g`    : '—', unit: '' },
-              { label: 'Fat',      val: n.fat_g      ? `${Math.round(n.fat_g)}g`      : '—', unit: '' },
-            ].map(({ label, val }) => (
-              <div key={label} className="bg-white dark:bg-cyprus-light rounded-xl p-3 text-center border border-cyprus/8 dark:border-sand/8">
-                <div className="font-bold text-sm text-cyprus dark:text-sand">{val ?? '—'}</div>
-                <div className="text-[10px] text-cyprus/40 dark:text-sand/40">{label}</div>
-              </div>
-            ))}
+
+        {loading ? (
+          <div className="flex justify-center py-16">
+            <Loader size={24} className="animate-spin text-cyprus dark:text-sand" />
           </div>
+        ) : (
+          <div className="p-5 space-y-5">
 
-          {/* Explanation */}
-          {recipe.explanation && (
-            <div className="bg-cyprus/5 dark:bg-sand/5 rounded-xl p-4 border border-cyprus/10 dark:border-sand/10">
-              <h3 className="text-xs font-bold uppercase tracking-wider text-cyprus/50 dark:text-sand/50 mb-1.5">AI Explanation</h3>
-              <p className="text-sm text-cyprus/70 dark:text-sand/70 leading-relaxed">{recipe.explanation}</p>
+            {/* Nutrition summary */}
+            <div className="grid grid-cols-4 gap-2">
+              {[
+                { label: 'Calories', val: cal  != null ? String(cal)            : '—' },
+                { label: 'Protein',  val: pro  != null ? `${Math.round(pro)}g`  : '—' },
+                { label: 'Carbs',    val: carb != null ? `${Math.round(carb)}g` : '—' },
+                { label: 'Fat',      val: fat  != null ? `${Math.round(fat)}g`  : '—' },
+              ].map(({ label, val }) => (
+                <div key={label} className="bg-white dark:bg-cyprus-light rounded-xl p-3 text-center border border-cyprus/8 dark:border-sand/8">
+                  <div className="font-bold text-sm text-cyprus dark:text-sand">{val}</div>
+                  <div className="text-[10px] text-cyprus/40 dark:text-sand/40">{label}</div>
+                </div>
+              ))}
             </div>
-          )}
 
-          {/* Ingredients */}
-          {ingredients.length > 0 && (
-            <div>
-              <h3 className="text-xs font-bold uppercase tracking-wider text-cyprus/50 dark:text-sand/50 mb-3">Ingredients</h3>
-              <ul className="space-y-2">
-                {ingredients.map((ing, i) => (
-                  <li key={i} className="flex items-start gap-2 text-sm text-cyprus/80 dark:text-sand/80">
-                    <span className="mt-2 w-1.5 h-1.5 rounded-full bg-cyprus/40 dark:bg-sand/40 shrink-0" />
-                    <span><strong>{ing.quantity}</strong> {ing.name}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
+            {/* Extra nutrition */}
+            {(n.fiber_g != null || n.sodium_mg != null) && (
+              <div className="flex gap-2 flex-wrap">
+                {n.fiber_g   != null && <span className="text-xs bg-cyprus/8 dark:bg-sand/8 text-cyprus/70 dark:text-sand/70 px-2.5 py-1 rounded-full">Fiber: {Math.round(n.fiber_g)}g</span>}
+                {n.sodium_mg != null && <span className="text-xs bg-cyprus/8 dark:bg-sand/8 text-cyprus/70 dark:text-sand/70 px-2.5 py-1 rounded-full">Sodium: {Math.round(n.sodium_mg)}mg</span>}
+                {n.sugar_g   != null && <span className="text-xs bg-cyprus/8 dark:bg-sand/8 text-cyprus/70 dark:text-sand/70 px-2.5 py-1 rounded-full">Sugar: {Math.round(n.sugar_g)}g</span>}
+              </div>
+            )}
 
-          {/* Steps */}
-          {steps.length > 0 && (
-            <div>
-              <h3 className="text-xs font-bold uppercase tracking-wider text-cyprus/50 dark:text-sand/50 mb-3">Instructions</h3>
-              <ol className="space-y-3">
-                {steps.map((step, i) => (
-                  <li key={i} className="flex gap-3">
-                    <span className="shrink-0 w-6 h-6 rounded-full bg-cyprus dark:bg-sand text-sand dark:text-cyprus text-xs font-bold flex items-center justify-center">
-                      {i + 1}
-                    </span>
-                    <p className="text-sm text-cyprus/80 dark:text-sand/80 leading-relaxed pt-0.5">{step}</p>
-                  </li>
-                ))}
-              </ol>
-            </div>
-          )}
-        </div>
+            {/* AI explanation */}
+            {recipe?.explanation && (
+              <div className="bg-cyprus/5 dark:bg-sand/5 rounded-xl p-4 border border-cyprus/10 dark:border-sand/10">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-cyprus/50 dark:text-sand/50 mb-1.5">AI Explanation</h3>
+                <p className="text-sm text-cyprus/70 dark:text-sand/70 leading-relaxed">{recipe.explanation}</p>
+              </div>
+            )}
+
+            {/* Ingredients */}
+            {ingr.length > 0 && (
+              <div>
+                <h3 className="text-xs font-bold uppercase tracking-wider text-cyprus/50 dark:text-sand/50 mb-3">Ingredients</h3>
+                <ul className="space-y-2">
+                  {ingr.map((ing, i) => (
+                    <li key={i} className="flex items-start gap-2 text-sm text-cyprus/80 dark:text-sand/80">
+                      <span className="mt-2 w-1.5 h-1.5 rounded-full bg-cyprus/40 dark:bg-sand/40 shrink-0" />
+                      <span><strong>{ing.quantity}</strong> {ing.name}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {/* Steps */}
+            {steps.length > 0 && (
+              <div>
+                <h3 className="text-xs font-bold uppercase tracking-wider text-cyprus/50 dark:text-sand/50 mb-3">Instructions</h3>
+                <ol className="space-y-3">
+                  {steps.map((step, i) => (
+                    <li key={i} className="flex gap-3">
+                      <span className="shrink-0 w-6 h-6 rounded-full bg-cyprus dark:bg-sand text-sand dark:text-cyprus text-xs font-bold flex items-center justify-center">
+                        {i + 1}
+                      </span>
+                      <p className="text-sm text-cyprus/80 dark:text-sand/80 leading-relaxed pt-0.5">{step}</p>
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            )}
+
+            {/* Substitutions */}
+            {recipe?.substitutions?.length > 0 && (
+              <div>
+                <h3 className="text-xs font-bold uppercase tracking-wider text-cyprus/50 dark:text-sand/50 mb-3">Substitutions</h3>
+                <div className="space-y-2">
+                  {recipe.substitutions.map((s, i) => (
+                    <div key={i} className="bg-white dark:bg-cyprus-light rounded-xl p-3 border border-cyprus/8 dark:border-sand/8">
+                      <p className="text-xs font-semibold text-cyprus dark:text-sand">
+                        <span className="line-through opacity-50">{s.original}</span> → {s.substitute}
+                      </p>
+                      <p className="text-xs text-cyprus/50 dark:text-sand/50 mt-0.5">{s.reason}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {steps.length === 0 && ingr.length === 0 && !loading && (
+              <p className="text-sm text-cyprus/40 dark:text-sand/40 text-center py-4">
+                Full recipe details could not be loaded.
+              </p>
+            )}
+
+            {/* ── Feedback ──────────────────────────────────────────────── */}
+            {recipe?.recipe_id && (
+              <div className="border-t border-cyprus/10 dark:border-sand/10 pt-5">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-cyprus/50 dark:text-sand/50 mb-3">
+                  Rate this Recipe
+                </h3>
+                <FeedbackPanel
+                  recipeId={recipe.recipe_id}
+                  threadId={recipe.thread_id}
+                />
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   )
 }
 
+/* ── Main page ───────────────────────────────────────────────────────────── */
 export default function RecipesPage() {
-  const { user } = useAuth()
   const [recipes,    setRecipes]    = useState([])
   const [loading,    setLoading]    = useState(true)
   const [selected,   setSelected]   = useState(null)
@@ -135,9 +402,9 @@ export default function RecipesPage() {
   const [error,      setError]      = useState('')
 
   const [form, setForm] = useState({
-    meal_type: 'lunch',
-    cuisine: 'any',
-    extra_instructions: '',
+    meal_type:   'lunch',
+    cuisine:     'any',
+    spice_level: 'medium',
   })
 
   useEffect(() => {
@@ -153,13 +420,27 @@ export default function RecipesPage() {
     setError('')
     try {
       const req = {
-        meal_type: form.meal_type,
-        ...(form.cuisine !== 'any' && { cuisine: form.cuisine }),
-        ...(form.extra_instructions && { extra_instructions: form.extra_instructions }),
+        meal_type:   form.meal_type,
+        ...(form.cuisine !== 'any' && { cuisine:     form.cuisine }),
+        ...(form.spice_level       && { spice_level: form.spice_level }),
       }
       const recipe = await recipeService.generate(req)
-      setRecipes(prev => [recipe, ...prev])
-      setSelected(recipe)
+      setRecipes(prev => [
+        {
+          recipe_id:         recipe.recipe_id,
+          dish_name:         recipe.dish_name,
+          cuisine:           recipe.cuisine,
+          meal_type:         recipe.meal_type,
+          calories:          recipe.nutrition?.calories,
+          protein_g:         recipe.nutrition?.protein_g,
+          carbs_g:           recipe.nutrition?.carbs_g,
+          fat_g:             recipe.nutrition?.fat_g,
+          prep_time_minutes: recipe.prep_time_minutes,
+          _full: recipe,
+        },
+        ...prev,
+      ])
+      setSelected({ _full: recipe, recipe_id: recipe.recipe_id })
       setShowForm(false)
     } catch (e) {
       setError(e.message)
@@ -196,7 +477,7 @@ export default function RecipesPage() {
               <select
                 value={form.meal_type}
                 onChange={e => setForm(f => ({ ...f, meal_type: e.target.value }))}
-                className="w-full bg-sand dark:bg-cyprus border border-cyprus/15 dark:border-sand/15 text-cyprus dark:text-sand rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-cyprus/30 dark:focus:ring-sand/30"
+                className="w-full bg-sand dark:bg-cyprus border border-cyprus/15 dark:border-sand/15 text-cyprus dark:text-sand rounded-xl px-3 py-2.5 text-sm focus:outline-none"
               >
                 {MEAL_TYPES.map(t => <option key={t} value={t} className="capitalize">{t}</option>)}
               </select>
@@ -206,23 +487,27 @@ export default function RecipesPage() {
               <select
                 value={form.cuisine}
                 onChange={e => setForm(f => ({ ...f, cuisine: e.target.value }))}
-                className="w-full bg-sand dark:bg-cyprus border border-cyprus/15 dark:border-sand/15 text-cyprus dark:text-sand rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-cyprus/30 dark:focus:ring-sand/30"
+                className="w-full bg-sand dark:bg-cyprus border border-cyprus/15 dark:border-sand/15 text-cyprus dark:text-sand rounded-xl px-3 py-2.5 text-sm focus:outline-none"
               >
                 {CUISINES.map(c => <option key={c} value={c} className="capitalize">{c === 'any' ? 'Any cuisine' : c}</option>)}
               </select>
             </div>
             <div>
-              <label className="block text-xs font-bold text-cyprus/50 dark:text-sand/50 uppercase tracking-wider mb-1.5">Notes (optional)</label>
-              <input
-                type="text"
-                value={form.extra_instructions}
-                onChange={e => setForm(f => ({ ...f, extra_instructions: e.target.value }))}
-                placeholder="e.g. high protein, quick prep"
-                className="w-full bg-sand dark:bg-cyprus border border-cyprus/15 dark:border-sand/15 text-cyprus dark:text-sand placeholder-cyprus/30 dark:placeholder-sand/30 rounded-xl px-3 py-2.5 text-sm focus:outline-none"
-              />
+              <label className="block text-xs font-bold text-cyprus/50 dark:text-sand/50 uppercase tracking-wider mb-1.5">Spice Level</label>
+              <select
+                value={form.spice_level}
+                onChange={e => setForm(f => ({ ...f, spice_level: e.target.value }))}
+                className="w-full bg-sand dark:bg-cyprus border border-cyprus/15 dark:border-sand/15 text-cyprus dark:text-sand rounded-xl px-3 py-2.5 text-sm focus:outline-none"
+              >
+                {SPICE_LEVELS.map(s => <option key={s} value={s} className="capitalize">{s}</option>)}
+              </select>
             </div>
             <div className="sm:col-span-3 flex gap-3 justify-end">
-              <button type="button" onClick={() => setShowForm(false)} className="text-sm text-cyprus/50 dark:text-sand/50 px-4 py-2 rounded-xl hover:bg-sand-dark dark:hover:bg-cyprus/20 cursor-pointer">
+              <button
+                type="button"
+                onClick={() => setShowForm(false)}
+                className="text-sm text-cyprus/50 dark:text-sand/50 px-4 py-2 rounded-xl hover:bg-sand-dark dark:hover:bg-cyprus/20 cursor-pointer"
+              >
                 Cancel
               </button>
               <button
@@ -243,14 +528,19 @@ export default function RecipesPage() {
       )}
 
       {loading ? (
-        <div className="flex justify-center py-16"><Loader size={24} className="animate-spin text-cyprus dark:text-sand" /></div>
+        <div className="flex justify-center py-16">
+          <Loader size={24} className="animate-spin text-cyprus dark:text-sand" />
+        </div>
       ) : recipes.length === 0 ? (
         <EmptyState
           icon={ChefHat}
           title="No recipes yet"
           desc="Generate your first AI-powered recipe tailored to your nutrition goals."
           action={
-            <button onClick={() => setShowForm(true)} className="inline-flex items-center gap-2 bg-cyprus dark:bg-sand text-sand dark:text-cyprus text-sm font-bold px-5 py-3 rounded-xl cursor-pointer">
+            <button
+              onClick={() => setShowForm(true)}
+              className="inline-flex items-center gap-2 bg-cyprus dark:bg-sand text-sand dark:text-cyprus text-sm font-bold px-5 py-3 rounded-xl cursor-pointer"
+            >
               <Plus size={15} /> Generate Recipe
             </button>
           }
@@ -258,12 +548,18 @@ export default function RecipesPage() {
       ) : (
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {recipes.map(r => (
-            <RecipeCard key={r.recipe_id ?? r.id} recipe={r} onClick={setSelected} />
+            <RecipeCard key={r.recipe_id} recipe={r} onClick={setSelected} />
           ))}
         </div>
       )}
 
-      {selected && <RecipeDetail recipe={selected} onClose={() => setSelected(null)} />}
+      {selected && (
+        <RecipeDetail
+          recipeId={selected._full?.recipe_id ?? selected.recipe_id}
+          initialRecipe={selected._full ?? selected}
+          onClose={() => setSelected(null)}
+        />
+      )}
     </div>
   )
 }

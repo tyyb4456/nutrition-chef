@@ -171,7 +171,7 @@ class RecipeRepository:
     def __init__(self, db: Session):
         self.db = db
 
-    def save(self, recipe: RecipeOutput, source: str = "generated", explanation: str = None) -> str:
+    def save(self, recipe: RecipeOutput, source: str = "generated", explanation: str = None, user_id: str = None) -> str:
         """
         Persist a RecipeOutput to the database.
         Returns the new recipe ID.
@@ -181,6 +181,7 @@ class RecipeRepository:
 
         db_recipe = Recipe(
             id=recipe_id,
+            user_id=user_id,
             name=recipe.dish_name,
             cuisine=recipe.cuisine,
             meal_type=recipe.meal_type,

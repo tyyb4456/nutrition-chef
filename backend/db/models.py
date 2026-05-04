@@ -166,6 +166,7 @@ class Recipe(Base):
     __tablename__ = "recipes"
 
     id:           Mapped[str]      = mapped_column(String(36), primary_key=True, default=_uuid)
+    user_id:      Mapped[str|None] = mapped_column(String(36), ForeignKey("users.id"), nullable=True, index=True)
     name:         Mapped[str]      = mapped_column(String(200))
     cuisine:      Mapped[str|None] = mapped_column(String(50), nullable=True)
     meal_type:    Mapped[str|None] = mapped_column(String(20), nullable=True)    # breakfast/lunch/dinner/snack
@@ -174,6 +175,7 @@ class Recipe(Base):
     prep_time_minutes: Mapped[int|None] = mapped_column(Integer, nullable=True)
 
     # Relationships
+    user:        Mapped["User | None"]           = relationship("User")
     ingredients: Mapped[list[RecipeIngredient]] = relationship("RecipeIngredient", back_populates="recipe", cascade="all, delete-orphan")
     nutrition:   Mapped[RecipeNutrition | None]  = relationship("RecipeNutrition",  back_populates="recipe", uselist=False, cascade="all, delete-orphan")
     feedback:    Mapped[list[UserFeedback]]      = relationship("UserFeedback",     back_populates="recipe")
