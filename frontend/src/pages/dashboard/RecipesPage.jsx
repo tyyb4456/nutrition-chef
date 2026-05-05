@@ -4,14 +4,14 @@ import { recipeService } from '../../services/recipeService'
 import { feedbackService } from '../../services/feedbackService'
 import EmptyState from '../../components/dashboard/EmptyState'
 
-const MEAL_TYPES  = ['breakfast', 'lunch', 'dinner', 'snack']
-const CUISINES    = ['any', 'italian', 'mexican', 'asian', 'mediterranean', 'indian', 'american', 'pakistani']
+const MEAL_TYPES = ['breakfast', 'lunch', 'dinner', 'snack']
+const CUISINES = ['any', 'italian', 'mexican', 'asian', 'mediterranean', 'indian', 'american', 'pakistani']
 const SPICE_LEVELS = ['mild', 'medium', 'hot']
 
-function getCalories(r)  { return r.calories  ?? r.nutrition?.calories }
-function getProtein(r)   { return r.protein_g  ?? r.nutrition?.protein_g }
-function getCarbs(r)     { return r.carbs_g    ?? r.nutrition?.carbs_g }
-function getFat(r)       { return r.fat_g      ?? r.nutrition?.fat_g }
+function getCalories(r) { return r.calories ?? r.nutrition?.calories }
+function getProtein(r) { return r.protein_g ?? r.nutrition?.protein_g }
+function getCarbs(r) { return r.carbs_g ?? r.nutrition?.carbs_g }
+function getFat(r) { return r.fat_g ?? r.nutrition?.fat_g }
 
 /* ── Star picker ─────────────────────────────────────────────────────────── */
 function StarPicker({ value, onChange, disabled }) {
@@ -30,11 +30,10 @@ function StarPicker({ value, onChange, disabled }) {
         >
           <Star
             size={22}
-            className={`transition-colors ${
-              n <= (hover || value)
+            className={`transition-colors ${n <= (hover || value)
                 ? 'fill-amber-400 text-amber-400'
                 : 'text-cyprus/20 dark:text-sand/20'
-            }`}
+              }`}
             strokeWidth={1.5}
           />
         </button>
@@ -45,15 +44,15 @@ function StarPicker({ value, onChange, disabled }) {
 
 /* ── Feedback panel (inside detail drawer) ───────────────────────────────── */
 function FeedbackPanel({ recipeId, threadId }) {
-  const [existing,    setExisting]    = useState(null)   // already-submitted feedback
-  const [loadingFb,   setLoadingFb]   = useState(true)
-  const [rating,      setRating]      = useState(0)
-  const [comment,     setComment]     = useState('')
-  const [submitting,  setSubmitting]  = useState(false)
-  const [submitted,   setSubmitted]   = useState(false)
-  const [loopRan,     setLoopRan]     = useState(false)
-  const [error,       setError]       = useState('')
-  const [deleting,    setDeleting]    = useState(false)
+  const [existing, setExisting] = useState(null)   // already-submitted feedback
+  const [loadingFb, setLoadingFb] = useState(true)
+  const [rating, setRating] = useState(0)
+  const [comment, setComment] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+  const [submitted, setSubmitted] = useState(false)
+  const [loopRan, setLoopRan] = useState(false)
+  const [error, setError] = useState('')
+  const [deleting, setDeleting] = useState(false)
 
   // Load existing feedback for this recipe
   useEffect(() => {
@@ -65,7 +64,7 @@ function FeedbackPanel({ recipeId, threadId }) {
         setExisting(fb)
         if (fb) { setRating(fb.rating); setComment(fb.comment ?? '') }
       })
-      .catch(() => {})
+      .catch(() => { })
       .finally(() => setLoadingFb(false))
   }, [recipeId])
 
@@ -122,7 +121,7 @@ function FeedbackPanel({ recipeId, threadId }) {
       <div className="space-y-3">
         <div className="flex items-center justify-between">
           <div className="flex gap-1">
-            {[1,2,3,4,5].map(n => (
+            {[1, 2, 3, 4, 5].map(n => (
               <Star
                 key={n}
                 size={18}
@@ -195,8 +194,8 @@ function FeedbackPanel({ recipeId, threadId }) {
 
 /* ── Recipe card ─────────────────────────────────────────────────────────── */
 function RecipeCard({ recipe, onClick }) {
-  const cal  = getCalories(recipe)
-  const pro  = getProtein(recipe)
+  const cal = getCalories(recipe)
+  const pro = getProtein(recipe)
   const carb = getCarbs(recipe)
 
   return (
@@ -218,9 +217,9 @@ function RecipeCard({ recipe, onClick }) {
         </div>
         <div className="grid grid-cols-4 gap-1.5">
           {[
-            { icon: Flame, val: cal  != null ? cal                          : '—', unit: 'kcal' },
-            { icon: Beef,  val: pro  != null ? `${Math.round(pro)}g`        : '—', unit: 'pro'  },
-            { icon: Wheat, val: carb != null ? `${Math.round(carb)}g`       : '—', unit: 'carb' },
+            { icon: Flame, val: cal != null ? cal : '—', unit: 'kcal' },
+            { icon: Beef, val: pro != null ? `${Math.round(pro)}g` : '—', unit: 'pro' },
+            { icon: Wheat, val: carb != null ? `${Math.round(carb)}g` : '—', unit: 'carb' },
             { icon: Clock, val: recipe.prep_time_minutes ? `${recipe.prep_time_minutes}m` : '—', unit: 'prep' },
           ].map(({ icon: Icon, val, unit }) => (
             <div key={unit} className="bg-sand dark:bg-cyprus rounded-lg p-1.5 text-center">
@@ -241,7 +240,7 @@ function RecipeCard({ recipe, onClick }) {
 
 /* ── Recipe detail drawer ────────────────────────────────────────────────── */
 function RecipeDetail({ recipeId, initialRecipe, onClose }) {
-  const [recipe,  setRecipe]  = useState(initialRecipe)
+  const [recipe, setRecipe] = useState(initialRecipe)
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
@@ -252,17 +251,17 @@ function RecipeDetail({ recipeId, initialRecipe, onClose }) {
     setLoading(true)
     recipeService.getById(id)
       .then(r => setRecipe(r))
-      .catch(() => {})
+      .catch(() => { })
       .finally(() => setLoading(false))
   }, [recipeId])
 
-  const n    = recipe?.nutrition ?? {}
-  const steps = Array.isArray(recipe?.steps)       ? recipe.steps       : []
-  const ingr  = Array.isArray(recipe?.ingredients) ? recipe.ingredients : []
-  const cal   = getCalories(recipe)
-  const pro   = getProtein(recipe)
-  const carb  = getCarbs(recipe)
-  const fat   = getFat(recipe)
+  const n = recipe?.nutrition ?? {}
+  const steps = Array.isArray(recipe?.steps) ? recipe.steps : []
+  const ingr = Array.isArray(recipe?.ingredients) ? recipe.ingredients : []
+  const cal = getCalories(recipe)
+  const pro = getProtein(recipe)
+  const carb = getCarbs(recipe)
+  const fat = getFat(recipe)
 
   return (
     <div className="fixed inset-0 z-50 flex">
@@ -289,10 +288,10 @@ function RecipeDetail({ recipeId, initialRecipe, onClose }) {
             {/* Nutrition summary */}
             <div className="grid grid-cols-4 gap-2">
               {[
-                { label: 'Calories', val: cal  != null ? String(cal)            : '—' },
-                { label: 'Protein',  val: pro  != null ? `${Math.round(pro)}g`  : '—' },
-                { label: 'Carbs',    val: carb != null ? `${Math.round(carb)}g` : '—' },
-                { label: 'Fat',      val: fat  != null ? `${Math.round(fat)}g`  : '—' },
+                { label: 'Calories', val: cal != null ? String(cal) : '—' },
+                { label: 'Protein', val: pro != null ? `${Math.round(pro)}g` : '—' },
+                { label: 'Carbs', val: carb != null ? `${Math.round(carb)}g` : '—' },
+                { label: 'Fat', val: fat != null ? `${Math.round(fat)}g` : '—' },
               ].map(({ label, val }) => (
                 <div key={label} className="bg-white dark:bg-cyprus-light rounded-xl p-3 text-center border border-cyprus/8 dark:border-sand/8">
                   <div className="font-bold text-sm text-cyprus dark:text-sand">{val}</div>
@@ -304,9 +303,9 @@ function RecipeDetail({ recipeId, initialRecipe, onClose }) {
             {/* Extra nutrition */}
             {(n.fiber_g != null || n.sodium_mg != null) && (
               <div className="flex gap-2 flex-wrap">
-                {n.fiber_g   != null && <span className="text-xs bg-cyprus/8 dark:bg-sand/8 text-cyprus/70 dark:text-sand/70 px-2.5 py-1 rounded-full">Fiber: {Math.round(n.fiber_g)}g</span>}
+                {n.fiber_g != null && <span className="text-xs bg-cyprus/8 dark:bg-sand/8 text-cyprus/70 dark:text-sand/70 px-2.5 py-1 rounded-full">Fiber: {Math.round(n.fiber_g)}g</span>}
                 {n.sodium_mg != null && <span className="text-xs bg-cyprus/8 dark:bg-sand/8 text-cyprus/70 dark:text-sand/70 px-2.5 py-1 rounded-full">Sodium: {Math.round(n.sodium_mg)}mg</span>}
-                {n.sugar_g   != null && <span className="text-xs bg-cyprus/8 dark:bg-sand/8 text-cyprus/70 dark:text-sand/70 px-2.5 py-1 rounded-full">Sugar: {Math.round(n.sugar_g)}g</span>}
+                {n.sugar_g != null && <span className="text-xs bg-cyprus/8 dark:bg-sand/8 text-cyprus/70 dark:text-sand/70 px-2.5 py-1 rounded-full">Sugar: {Math.round(n.sugar_g)}g</span>}
               </div>
             )}
 
@@ -392,18 +391,29 @@ function RecipeDetail({ recipeId, initialRecipe, onClose }) {
   )
 }
 
+/* ── Stream step definitions (recipe pipeline) ───────────────────────────── */
+const RECIPE_STEPS = [
+  { key: 'health_goal', label: 'Calculating dietary requirements' },
+  { key: 'recipe_generator', label: 'Crafting your personalized recipe' },
+  { key: 'nutrition_validation', label: 'Validating nutritional balance' },
+  { key: 'substitution', label: 'Checking allergen substitutions' },
+  { key: 'explainability', label: 'Generating AI explanation' },
+]
+
 /* ── Main page ───────────────────────────────────────────────────────────── */
 export default function RecipesPage() {
-  const [recipes,    setRecipes]    = useState([])
-  const [loading,    setLoading]    = useState(true)
-  const [selected,   setSelected]   = useState(null)
-  const [showForm,   setShowForm]   = useState(false)
+  const [recipes, setRecipes] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [selected, setSelected] = useState(null)
+  const [showForm, setShowForm] = useState(false)
   const [generating, setGenerating] = useState(false)
-  const [error,      setError]      = useState('')
+  const [completedSteps, setCompletedSteps] = useState([])
+  const [activeStep, setActiveStep] = useState(null)
+  const [error, setError] = useState('')
 
   const [form, setForm] = useState({
-    meal_type:   'lunch',
-    cuisine:     'any',
+    meal_type: 'lunch',
+    cuisine: 'any',
     spice_level: 'medium',
   })
 
@@ -418,34 +428,51 @@ export default function RecipesPage() {
     e.preventDefault()
     setGenerating(true)
     setError('')
+    setCompletedSteps([])
+    setActiveStep(RECIPE_STEPS[0].key)
+
+    const req = {
+      meal_type: form.meal_type,
+      ...(form.cuisine !== 'any' && { cuisine: form.cuisine }),
+      ...(form.spice_level && { spice_level: form.spice_level }),
+    }
+
     try {
-      const req = {
-        meal_type:   form.meal_type,
-        ...(form.cuisine !== 'any' && { cuisine:     form.cuisine }),
-        ...(form.spice_level       && { spice_level: form.spice_level }),
-      }
-      const recipe = await recipeService.generate(req)
-      setRecipes(prev => [
-        {
-          recipe_id:         recipe.recipe_id,
-          dish_name:         recipe.dish_name,
-          cuisine:           recipe.cuisine,
-          meal_type:         recipe.meal_type,
-          calories:          recipe.nutrition?.calories,
-          protein_g:         recipe.nutrition?.protein_g,
-          carbs_g:           recipe.nutrition?.carbs_g,
-          fat_g:             recipe.nutrition?.fat_g,
-          prep_time_minutes: recipe.prep_time_minutes,
-          _full: recipe,
-        },
-        ...prev,
-      ])
-      setSelected({ _full: recipe, recipe_id: recipe.recipe_id })
-      setShowForm(false)
+      await recipeService.generateStream(req, (event) => {
+        if (event.type === 'progress') {
+          setCompletedSteps(prev => [...prev, event.step])
+          const idx = RECIPE_STEPS.findIndex(s => s.key === event.step)
+          const next = RECIPE_STEPS[idx + 1]
+          setActiveStep(next?.key ?? null)
+        } else if (event.type === 'result') {
+          const recipe = event.data
+          setRecipes(prev => [
+            {
+              recipe_id: recipe.recipe_id,
+              dish_name: recipe.dish_name,
+              cuisine: recipe.cuisine,
+              meal_type: recipe.meal_type,
+              calories: recipe.nutrition?.calories,
+              protein_g: recipe.nutrition?.protein_g,
+              carbs_g: recipe.nutrition?.carbs_g,
+              fat_g: recipe.nutrition?.fat_g,
+              prep_time_minutes: recipe.prep_time_minutes,
+              _full: recipe,
+            },
+            ...prev,
+          ])
+          setSelected({ _full: recipe, recipe_id: recipe.recipe_id })
+          setShowForm(false)
+        } else if (event.type === 'error') {
+          setError(event.message || 'Generation failed.')
+        }
+      })
     } catch (e) {
       setError(e.message)
     } finally {
       setGenerating(false)
+      setActiveStep(null)
+      setCompletedSteps([])
     }
   }
 
@@ -520,9 +547,32 @@ export default function RecipesPage() {
             </div>
           </form>
           {generating && (
-            <p className="text-xs text-cyprus/50 dark:text-sand/50 mt-3 text-center">
-              AI is crafting your recipe… this takes 15–30 seconds.
-            </p>
+            <div className="mt-4 space-y-1.5">
+              {RECIPE_STEPS.map(step => {
+                const done = completedSteps.includes(step.key)
+                const active = activeStep === step.key
+                return (
+                  <div
+                    key={step.key}
+                    className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs transition-all ${done
+                        ? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300'
+                        : active
+                          ? 'bg-cyprus/8 dark:bg-sand/8 text-cyprus dark:text-sand font-semibold'
+                          : 'text-cyprus/30 dark:text-sand/30'
+                      }`}
+                  >
+                    {done ? (
+                      <CheckCircle size={13} className="text-green-500 shrink-0" />
+                    ) : active ? (
+                      <Loader size={13} className="animate-spin shrink-0" />
+                    ) : (
+                      <span className="w-3.5 h-3.5 rounded-full border border-cyprus/20 dark:border-sand/20 shrink-0" />
+                    )}
+                    {step.label}
+                  </div>
+                )
+              })}
+            </div>
           )}
         </div>
       )}

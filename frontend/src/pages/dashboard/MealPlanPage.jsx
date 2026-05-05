@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { CalendarDays, RefreshCw, Loader, ChevronDown, ChevronUp, ShoppingCart } from 'lucide-react'
+import { CalendarDays, RefreshCw, Loader, ChevronDown, ChevronUp, ShoppingCart, CheckCircle } from 'lucide-react'
 import { mealPlanService } from '../../services/mealPlanService'
 import EmptyState from '../../components/dashboard/EmptyState'
 
@@ -7,16 +7,25 @@ const SLOTS = ['breakfast', 'lunch', 'dinner', 'snack']
 const DAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']
 const DAY_SHORT = { monday: 'Mon', tuesday: 'Tue', wednesday: 'Wed', thursday: 'Thu', friday: 'Fri', saturday: 'Sat', sunday: 'Sun' }
 
+const PLAN_STEPS = [
+  { key: 'health_goal', label: 'Calculating your dietary requirements' },
+  { key: 'weekly_plan', label: 'Generating 7-day meal plan (28 meals)' },
+  { key: 'grocery', label: 'Building your grocery list' },
+  { key: 'meal_prep', label: 'Creating batch-cooking schedule' },
+]
+
 function todayDay() {
   return new Date().toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase()
 }
 
 export default function MealPlanPage() {
-  const [plan,      setPlan]      = useState(null)
-  const [loading,   setLoading]   = useState(true)
-  const [generating,setGenerating]= useState(false)
-  const [error,     setError]     = useState('')
-  const [showGrocery,setShowGrocery] = useState(false)
+  const [plan, setPlan] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [generating, setGenerating] = useState(false)
+  const [completedSteps, setCompletedSteps] = useState([])
+  const [activeStep, setActiveStep] = useState(null)
+  const [error, setError] = useState('')
+  const [showGrocery, setShowGrocery] = useState(false)
 
   const fetchActive = async () => {
     try {
@@ -34,13 +43,28 @@ export default function MealPlanPage() {
   const generate = async () => {
     setGenerating(true)
     setError('')
+    setCompletedSteps([])
+    setActiveStep(PLAN_STEPS[0].key)
+
     try {
-      const p = await mealPlanService.generate()
-      setPlan(p)
+      await mealPlanService.generateStream({}, (event) => {
+        if (event.type === 'progress') {
+          setCompletedSteps(prev => [...prev, event.step])
+          const idx = PLAN_STEPS.findIndex(s => s.key === event.step)
+          const next = PLAN_STEPS[idx + 1]
+          setActiveStep(next?.key ?? null)
+        } else if (event.type === 'result') {
+          setPlan(event.data)
+        } else if (event.type === 'error') {
+          setError(event.message || 'Meal plan generation failed.')
+        }
+      })
     } catch (e) {
       setError(e.message)
     } finally {
       setGenerating(false)
+      setActiveStep(null)
+      setCompletedSteps([])
     }
   }
 
@@ -91,10 +115,37 @@ export default function MealPlanPage() {
       )}
 
       {generating && (
-        <div className="mb-6 bg-white dark:bg-cyprus-light border border-cyprus/10 dark:border-sand/10 rounded-2xl p-6 text-center">
-          <Loader size={28} className="animate-spin text-cyprus dark:text-sand mx-auto mb-3" />
-          <p className="font-semibold text-cyprus dark:text-sand">Crafting your personalized 7-day plan…</p>
-          <p className="text-xs text-cyprus/50 dark:text-sand/50 mt-1">This takes 20–40 seconds. Please wait.</p>
+        <div className="mb-6 bg-white dark:bg-cyprus-light border border-cyprus/10 dark:border-sand/10 rounded-2xl p-5">
+          <p className="font-semibold text-cyprus dark:text-sand mb-4">Crafting your personalized 7-day plan…</p>
+          <div className="space-y-1.5">
+            {PLAN_STEPS.map(step => {
+              const done = completedSteps.includes(step.key)
+              const active = activeStep === step.key
+              return (
+                <div
+                  key={step.key}
+                  className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm transition-all ${done
+                      ? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300'
+                      : active
+                        ? 'bg-cyprus/8 dark:bg-sand/8 text-cyprus dark:text-sand font-semibold'
+                        : 'text-cyprus/30 dark:text-sand/30'
+                    }`}
+                >
+                  {done ? (
+                    <CheckCircle size={15} className="text-green-500 shrink-0" />
+                  ) : active ? (
+                    <Loader size={15} className="animate-spin shrink-0" />
+                  ) : (
+                    <span className="w-4 h-4 rounded-full border border-cyprus/20 dark:border-sand/20 shrink-0" />
+                  )}
+                  {step.label}
+                  {step.key === 'weekly_plan' && active && (
+                    <span className="ml-auto text-xs text-cyprus/40 dark:text-sand/40 font-normal">~2 min</span>
+                  )}
+                </div>
+              )
+            })}
+          </div>
         </div>
       )}
 
@@ -122,11 +173,10 @@ export default function MealPlanPage() {
               <div className="grid grid-cols-8 gap-2 mb-3">
                 <div className="text-xs font-bold text-cyprus/40 dark:text-sand/40 uppercase tracking-wider py-2" />
                 {DAYS.map(d => (
-                  <div key={d} className={`text-center py-2 rounded-xl text-xs font-bold uppercase tracking-wider ${
-                    d === today
+                  <div key={d} className={`text-center py-2 rounded-xl text-xs font-bold uppercase tracking-wider ${d === today
                       ? 'bg-cyprus dark:bg-sand text-sand dark:text-cyprus'
                       : 'text-cyprus/50 dark:text-sand/50'
-                  }`}>
+                    }`}>
                     {DAY_SHORT[d]}
                   </div>
                 ))}
@@ -144,11 +194,10 @@ export default function MealPlanPage() {
                     const meal = mealForSlot(d, slot)
                     const isToday = d === today
                     return (
-                      <div key={d} className={`rounded-xl p-2.5 border min-h-[72px] ${
-                        isToday
+                      <div key={d} className={`rounded-xl p-2.5 border min-h-[72px] ${isToday
                           ? 'bg-cyprus/5 dark:bg-sand/5 border-cyprus/25 dark:border-sand/25'
                           : 'bg-white dark:bg-cyprus-light border-cyprus/8 dark:border-sand/8'
-                      }`}>
+                        }`}>
                         {meal ? (
                           <>
                             <p className="text-[11px] font-semibold text-cyprus dark:text-sand leading-tight line-clamp-2">

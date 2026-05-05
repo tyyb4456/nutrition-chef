@@ -92,7 +92,7 @@ class NutritionState(BaseModel):
 
     # ── Pipeline error propagation ────────────────────────────────────────────
     pipeline_error: Optional[str] = None
-
+    retry_count : Optional[int] = None
 
 # ═══════════════════════════════════════════════════════════════
 # WEEKLY PLAN STATE (unchanged)

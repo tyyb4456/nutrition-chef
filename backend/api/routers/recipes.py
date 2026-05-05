@@ -12,6 +12,7 @@ from __future__ import annotations
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from api.dependencies import get_db, get_current_user
@@ -20,14 +21,56 @@ from api.schemas.recipe_schemas import (
     FollowupRequest, FollowupResponse,                                     # ← Phase 8
 )
 from api.services.recipe_service import (
-    generate_recipe, get_recipe_by_id, list_user_recipes,
-    followup_recipe,                                                        # ← Phase 8
+    generate_recipe, generate_recipe_stream, get_recipe_by_id,
+    list_user_recipes, followup_recipe,
 )
 from db.models import User
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/recipes", tags=["Recipes"])
+
+
+# ── POST /recipes/generate/stream (SSE) ──────────────────────────────────────
+
+@router.post(
+    "/generate/stream",
+    summary="Generate a recipe with real-time SSE progress",
+    description="""
+Same as `POST /recipes/generate` but streams progress events via Server-Sent Events.
+
+Each event is a JSON object on a `data:` line:
+
+| `type`      | Fields                        | Meaning                          |
+|-------------|-------------------------------|----------------------------------|
+| `progress`  | `step`, `message`             | A pipeline node just completed   |
+| `result`    | `data` (full RecipeResponse)  | Final recipe — generation done   |
+| `error`     | `message`                     | Something went wrong             |
+| `done`      | —                             | Stream closed                    |
+
+⏱️ Events arrive every 2–8 seconds as each AI node completes.
+""",
+)
+async def generate_recipe_stream_endpoint(
+    payload:      GenerateRecipeRequest = GenerateRecipeRequest(),
+    current_user: User = Depends(get_current_user),
+    db:           Session = Depends(get_db),
+):
+    async def event_gen():
+        try:
+            async for chunk in generate_recipe_stream(
+                user=current_user, db=db, request=payload
+            ):
+                yield chunk
+        except Exception as exc:
+            import json
+            yield f"data: {json.dumps({'type': 'error', 'message': str(exc)})}\n\n"
+
+    return StreamingResponse(
+        event_gen(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 # ── POST /recipes/generate ────────────────────────────────────────────────────

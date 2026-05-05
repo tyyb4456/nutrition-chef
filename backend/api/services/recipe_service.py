@@ -218,8 +218,111 @@ def _build_response(
 
 
 # ═══════════════════════════════════════════════════════════════
+# SSE STEP LABELS
+# ═══════════════════════════════════════════════════════════════
+
+_NODE_LABELS: dict[str, str] = {
+    "health_goal":          "Calculating your dietary requirements",
+    "recipe_generator":     "Crafting your personalized recipe",
+    "nutrition_validation": "Validating nutritional balance",
+    "macro_adjustment":     "Fine-tuning macro ratios",
+    "substitution":         "Checking allergen substitutions",
+    "explainability":       "Generating AI explanation",
+}
+
+
+# ═══════════════════════════════════════════════════════════════
 # PUBLIC SERVICE FUNCTIONS
 # ═══════════════════════════════════════════════════════════════
+
+async def generate_recipe_stream(
+    user: User,
+    db: Session,
+    request: GenerateRecipeRequest,
+):
+    """
+    Async generator that yields SSE-formatted strings.
+    Streams LangGraph node progress then emits the final recipe as a 'result' event.
+    """
+    import asyncio
+    import json
+
+    state     = _build_state_from_profile(user, db, request)
+    thread_id = f"gen-{uuid.uuid4()}"
+    config    = {"configurable": {"thread_id": thread_id}}
+
+    loop: asyncio.AbstractEventLoop = asyncio.get_event_loop()
+    queue: asyncio.Queue = asyncio.Queue()
+
+    def _stream_thread() -> None:
+        try:
+            for chunk in nutrition_graph.stream(
+                state,
+                config=config,
+                stream_mode="updates",
+            ):
+                for node_name in chunk:
+                    label = _NODE_LABELS.get(node_name)
+                    if label:
+                        loop.call_soon_threadsafe(
+                            queue.put_nowait,
+                            {"type": "progress", "step": node_name, "message": label},
+                        )
+            # Graph paused at feedback interrupt — read final state from checkpointer
+            snapshot    = nutrition_graph.get_state(config)
+            final_state = NutritionState(**snapshot.values) if snapshot else None
+            loop.call_soon_threadsafe(
+                queue.put_nowait,
+                {"type": "_done", "state": final_state},
+            )
+        except Exception as exc:
+            loop.call_soon_threadsafe(
+                queue.put_nowait,
+                {"type": "error", "message": str(exc)},
+            )
+
+    _executor.submit(_stream_thread)
+
+    while True:
+        item = await queue.get()
+
+        if item["type"] == "error":
+            yield f"data: {json.dumps({'type': 'error', 'message': item['message']})}\n\n"
+            return
+
+        if item["type"] == "_done":
+            final_state = item["state"]
+            if not final_state or not final_state.final_recipe:
+                yield f"data: {json.dumps({'type': 'error', 'message': 'Pipeline completed but no recipe was generated.'})}\n\n"
+                return
+
+            recipe_repo = RecipeRepository(db)
+            recipe_id   = recipe_repo.save(
+                final_state.final_recipe,
+                source      = "generated",
+                explanation = final_state.recipe_explanation,
+                user_id     = user.id,
+            )
+            db.flush()
+
+            nutrition_graph.update_state(config, {"current_recipe_id": recipe_id})
+
+            logger.info(
+                "   🗸   Recipe '%s' saved (id=%s, thread=%s) for user %s",
+                final_state.final_recipe.dish_name, recipe_id, thread_id, user.id,
+            )
+
+            response     = _build_response(final_state, recipe_id, thread_id=thread_id)
+            result_event = json.dumps({
+                "type": "result",
+                "data": json.loads(response.model_dump_json()),
+            })
+            yield f"data: {result_event}\n\n"
+            yield 'data: {"type":"done"}\n\n'
+            return
+
+        yield f"data: {json.dumps(item)}\n\n"
+
 
 async def generate_recipe(
     user: User,

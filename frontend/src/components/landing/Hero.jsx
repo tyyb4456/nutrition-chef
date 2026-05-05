@@ -1,31 +1,17 @@
 import { useEffect, useState } from 'react'
-import { ArrowRight, Play, Zap, Target, Leaf, ChevronRight } from 'lucide-react'
+import { ArrowRight, Play, Zap, Target, Leaf } from 'lucide-react'
 import Button from '../ui/Button'
-import Badge from '../ui/Badge'
-
-const stats = [
-  { value: '50K+', label: 'Active Users' },
-  { value: '2M+',  label: 'Meals Planned' },
-  { value: '4.9★', label: 'App Rating' },
-]
 
 const badges = [
-  { icon: Zap,    label: 'AI-Powered' },
+  { icon: Zap, label: 'AI-Powered' },
   { icon: Target, label: 'Goal-Oriented' },
-  { icon: Leaf,   label: 'Personalized' },
+  { icon: Leaf, label: 'Personalized' },
 ]
 
 const macros = [
   { label: 'Calories', val: '1,840', dot: 'bg-cyprus dark:bg-sand' },
-  { label: 'Protein',  val: '120g',  dot: 'bg-cyprus/60 dark:bg-sand/60' },
-  { label: 'Carbs',    val: '210g',  dot: 'bg-cyprus/40 dark:bg-sand/40' },
-]
-
-const avatarUrls = [
-  'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=40&h=40&fit=crop&crop=face',
-  'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=40&h=40&fit=crop&crop=face',
-  'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=40&h=40&fit=crop&crop=face',
-  'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=40&h=40&fit=crop&crop=face',
+  { label: 'Protein', val: '120g', dot: 'bg-cyprus/60 dark:bg-sand/60' },
+  { label: 'Carbs', val: '210g', dot: 'bg-cyprus/40 dark:bg-sand/40' },
 ]
 
 export default function Hero() {
@@ -62,7 +48,7 @@ export default function Hero() {
             </p>
 
             {/* CTAs */}
-            <div className="flex flex-wrap gap-4 mb-10">
+            <div className="flex flex-wrap gap-4">
               <Button href="#pricing" size="lg">
                 Start Free Today
                 <ArrowRight size={18} strokeWidth={2.5} />
@@ -71,31 +57,6 @@ export default function Hero() {
                 <Play size={16} strokeWidth={2.5} className="fill-current" />
                 See How It Works
               </Button>
-            </div>
-
-            {/* Social proof */}
-            <div className="flex items-center gap-4 mb-10">
-              <div className="flex -space-x-2">
-                {avatarUrls.map((src, i) => (
-                  <img key={i} src={src} alt="" className="w-9 h-9 rounded-full border-2 border-sand dark:border-cyprus object-cover" />
-                ))}
-              </div>
-              <div>
-                <div className="text-amber-500 text-sm font-bold">★★★★★</div>
-                <p className="text-sm text-cyprus/60 dark:text-sand/60">
-                  Loved by <span className="font-semibold text-cyprus dark:text-sand">50,000+</span> people
-                </p>
-              </div>
-            </div>
-
-            {/* Stats */}
-            <div className="flex flex-wrap gap-8 pt-6 border-t border-cyprus/10 dark:border-sand/10">
-              {stats.map((s) => (
-                <div key={s.label}>
-                  <div className="font-display text-2xl font-bold text-cyprus dark:text-sand">{s.value}</div>
-                  <div className="text-xs text-cyprus/50 dark:text-sand/50 font-medium mt-0.5">{s.label}</div>
-                </div>
-              ))}
             </div>
           </div>
 
@@ -110,14 +71,14 @@ export default function Hero() {
             <div className="relative z-10 animate-float">
               <div className="w-72 h-72 sm:w-88 sm:h-88 lg:w-96 lg:h-96 rounded-3xl overflow-hidden shadow-2xl border-4 border-white dark:border-cyprus-light">
                 <img
-                  src="https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=600&h=600&fit=crop"
+                  src="pexels-szymon-shields-1503561-33033817.jpg"
                   alt="Healthy meal bowl"
                   className="w-full h-full object-cover"
                 />
               </div>
 
               {/* Floating — nutrition card */}
-              <div className="absolute -left-10 sm:-left-16 top-10 bg-sand dark:bg-cyprus-light rounded-2xl shadow-xl p-4 border border-cyprus/10 dark:border-sand/10 w-44 backdrop-blur-sm">
+              <div className="absolute -left-30 sm:-left-25 top-10 bg-sand dark:bg-cyprus-light rounded-2xl shadow-xl p-4 border border-cyprus/10 dark:border-sand/10 w-44 backdrop-blur-sm">
                 <div className="text-[10px] font-bold uppercase tracking-wider text-cyprus/50 dark:text-sand/50 mb-2.5">Today's Plan</div>
                 <div className="space-y-2">
                   {macros.map((m) => (
@@ -131,7 +92,7 @@ export default function Hero() {
               </div>
 
               {/* Floating — AI badge */}
-              <div className="absolute -right-6 sm:-right-12 bottom-14 bg-sand dark:bg-cyprus-light rounded-2xl shadow-xl px-4 py-3 border border-cyprus/10 dark:border-sand/10 flex items-center gap-3">
+              <div className="absolute -right-16 sm:-right-20 bottom-14 bg-sand dark:bg-cyprus-light rounded-2xl shadow-xl px-4 py-3 border border-cyprus/10 dark:border-sand/10 flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-cyprus dark:bg-sand flex items-center justify-center shrink-0">
                   <Leaf size={18} className="text-sand dark:text-cyprus" />
                 </div>

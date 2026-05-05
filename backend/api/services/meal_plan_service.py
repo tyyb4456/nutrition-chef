@@ -106,23 +106,40 @@ def _build_weekly_state(
 
 def _run_weekly_pipeline(state: WeeklyPlanState) -> WeeklyPlanState:
     """Runs all 4 agents sequentially (blocking — called from thread pool)."""
+    return _run_weekly_pipeline_streaming(state, on_progress=None)
 
-    # Step 1: Calculate calorie target + macro split
+
+def _run_weekly_pipeline_streaming(
+    state: WeeklyPlanState,
+    on_progress,            # callable(step: str, message: str) | None
+) -> WeeklyPlanState:
+    """
+    Runs all 4 agents sequentially.
+    Calls on_progress(step, message) before each step if provided.
+    """
+    def _emit(step: str, msg: str) -> None:
+        if on_progress:
+            try:
+                on_progress(step, msg)
+            except Exception:
+                pass
+
+    _emit("health_goal", "Calculating your dietary requirements")
     updates = health_goal_node(state)
     state   = state.model_copy(update=updates)
 
-    # Step 2: Generate 7-day meal plan (28 LLM calls)
+    _emit("weekly_plan", "Generating your 7-day meal plan (28 meals)…")
     updates = weekly_plan_node(state)
     state   = state.model_copy(update=updates)
 
     if state.pipeline_error or not state.meal_plan:
         raise ValueError(state.pipeline_error or "Meal plan generation failed.")
 
-    # Step 3: Grocery list
+    _emit("grocery", "Building your grocery list")
     updates = grocery_node(state)
     state   = state.model_copy(update=updates)
 
-    # Step 4: Prep schedule
+    _emit("meal_prep", "Creating your batch-cooking schedule")
     updates = meal_prep_node(state)
     state   = state.model_copy(update=updates)
 
@@ -276,6 +293,72 @@ def _build_plan_response(
 # ═══════════════════════════════════════════════════════════════
 # PUBLIC SERVICE FUNCTIONS
 # ═══════════════════════════════════════════════════════════════
+
+async def generate_meal_plan_stream(
+    user: User,
+    db: Session,
+    request: GenerateMealPlanRequest,
+):
+    """
+    Async generator that yields SSE-formatted strings.
+    Emits progress events before each pipeline step, then a final 'result' event.
+    """
+    import asyncio
+    import json
+
+    state      = _build_weekly_state(user, db, request)
+    week_start = _parse_week_start(request.week_start)
+
+    loop: asyncio.AbstractEventLoop = asyncio.get_event_loop()
+    queue: asyncio.Queue = asyncio.Queue()
+
+    def on_progress(step: str, message: str) -> None:
+        loop.call_soon_threadsafe(
+            queue.put_nowait,
+            {"type": "progress", "step": step, "message": message},
+        )
+
+    def _run_thread() -> None:
+        try:
+            result = _run_weekly_pipeline_streaming(state, on_progress)
+            loop.call_soon_threadsafe(
+                queue.put_nowait,
+                {"type": "_done", "state": result},
+            )
+        except Exception as exc:
+            loop.call_soon_threadsafe(
+                queue.put_nowait,
+                {"type": "error", "message": str(exc)},
+            )
+
+    _executor.submit(_run_thread)
+
+    while True:
+        item = await queue.get()
+
+        if item["type"] == "error":
+            yield f"data: {json.dumps({'type': 'error', 'message': item['message']})}\n\n"
+            return
+
+        if item["type"] == "_done":
+            final_state = item["state"]
+            plan_id = _persist_plan(
+                user_id    = user.id,
+                state      = final_state,
+                week_start = week_start,
+                db         = db,
+            )
+            response     = _build_plan_response(plan_id, week_start, final_state)
+            result_event = json.dumps({
+                "type": "result",
+                "data": json.loads(response.model_dump_json()),
+            })
+            yield f"data: {result_event}\n\n"
+            yield 'data: {"type":"done"}\n\n'
+            return
+
+        yield f"data: {json.dumps(item)}\n\n"
+
 
 async def generate_meal_plan(
     user: User,

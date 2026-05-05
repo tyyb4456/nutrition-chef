@@ -15,6 +15,7 @@ from __future__ import annotations
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from api.dependencies import get_db, get_current_user
@@ -23,13 +24,53 @@ from api.schemas.meal_plan_schemas import (
     GroceryListOut, PrepScheduleOut,
 )
 from api.services.meal_plan_service import (
-    generate_meal_plan, get_active_plan, list_user_plans,
+    generate_meal_plan, generate_meal_plan_stream, get_active_plan, list_user_plans,
 )
 from db.models import User
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/meal-plans", tags=["Meal Plans"])
+
+
+# ── POST /meal-plans/generate/stream (SSE) ───────────────────────────────────
+
+@router.post(
+    "/generate/stream",
+    summary="Generate a 7-day meal plan with real-time SSE progress",
+    description="""
+Same as `POST /meal-plans/generate` but streams progress events via Server-Sent Events.
+
+| `type`      | Fields                           | Meaning                         |
+|-------------|----------------------------------|---------------------------------|
+| `progress`  | `step`, `message`                | A pipeline step just started    |
+| `result`    | `data` (full MealPlanResponse)   | Final plan — generation done    |
+| `error`     | `message`                        | Something went wrong            |
+| `done`      | —                                | Stream closed                   |
+
+⏱️ The `weekly_plan` step takes the longest (28 LLM calls — 90–180 s total).
+""",
+)
+async def generate_meal_plan_stream_endpoint(
+    payload:      GenerateMealPlanRequest = GenerateMealPlanRequest(),
+    current_user: User = Depends(get_current_user),
+    db:           Session = Depends(get_db),
+):
+    async def event_gen():
+        try:
+            async for chunk in generate_meal_plan_stream(
+                user=current_user, db=db, request=payload
+            ):
+                yield chunk
+        except Exception as exc:
+            import json
+            yield f"data: {json.dumps({'type': 'error', 'message': str(exc)})}\n\n"
+
+    return StreamingResponse(
+        event_gen(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 # ── POST /meal-plans/generate ─────────────────────────────────────────────────
