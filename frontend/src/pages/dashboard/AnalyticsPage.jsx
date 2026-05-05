@@ -52,6 +52,13 @@ export default function AnalyticsPage() {
     ? Math.round(adherence.reduce((s, a) => s + (a.adherence_pct ?? 0), 0) / adherence.length)
     : 0
 
+  // Build a flat key→value map from the preferences object for display
+  const prefEntries = preferences
+    ? Object.entries(preferences).filter(([, v]) =>
+        v !== null && v !== undefined && !(Array.isArray(v) && v.length === 0) && v !== ''
+      )
+    : []
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
@@ -77,16 +84,20 @@ export default function AnalyticsPage() {
         </button>
       </div>
 
-      {error && <div className="mb-5 px-4 py-3 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 text-sm">{error}</div>}
+      {error && (
+        <div className="mb-5 px-4 py-3 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 text-sm">
+          {error}
+        </div>
+      )}
 
       {/* Summary cards */}
       {adherence.length > 0 && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
           {[
-            { label: 'Days Tracked',   value: adherence.length },
-            { label: 'Avg Calories',   value: `${avgCalories} kcal` },
-            { label: 'Avg Adherence',  value: `${avgAdherence}%` },
-            { label: 'Target',         value: `${calTarget} kcal` },
+            { label: 'Days Tracked',  value: adherence.length },
+            { label: 'Avg Calories',  value: `${avgCalories} kcal` },
+            { label: 'Avg Adherence', value: `${avgAdherence}%` },
+            { label: 'Target',        value: `${calTarget} kcal` },
           ].map(({ label, value }) => (
             <div key={label} className="bg-white dark:bg-cyprus-light border border-cyprus/8 dark:border-sand/8 rounded-2xl p-4 text-center">
               <div className="font-display text-xl font-bold text-cyprus dark:text-sand">{value}</div>
@@ -107,9 +118,9 @@ export default function AnalyticsPage() {
             <>
               <div className="flex items-end gap-1.5 h-40 mb-2">
                 {adherence.map((a, i) => {
-                  const pct = Math.min((a.actual_calories / maxCal) * 100, 100)
+                  const pct       = Math.min((a.actual_calories / maxCal) * 100, 100)
                   const targetPct = (calTarget / maxCal) * 100
-                  const onTarget = a.adherence_pct >= 85 && a.adherence_pct <= 115
+                  const onTarget  = a.adherence_pct >= 85 && a.adherence_pct <= 115
                   return (
                     <div key={i} className="flex-1 relative flex items-end" style={{ height: '100%' }}>
                       <div
@@ -139,16 +150,18 @@ export default function AnalyticsPage() {
         {/* Learned Preferences */}
         <div className="bg-white dark:bg-cyprus-light border border-cyprus/8 dark:border-sand/8 rounded-2xl p-5">
           <h2 className="font-display font-bold text-base text-cyprus dark:text-sand mb-4">AI-Learned Preferences</h2>
-          {!preferences || Object.keys(preferences?.preferences ?? {}).length === 0 ? (
+          {prefEntries.length === 0 ? (
             <EmptyState icon={TrendingUp} title="Learning in progress" desc="Rate more recipes so the AI can learn your tastes." />
           ) : (
             <div className="space-y-3">
-              {Object.entries(preferences.preferences ?? {}).slice(0, 8).map(([key, val]) => (
+              {prefEntries.slice(0, 8).map(([key, val]) => (
                 <div key={key} className="flex items-start justify-between gap-2">
                   <span className="text-xs font-semibold text-cyprus/60 dark:text-sand/60 capitalize">
                     {key.replace(/_/g, ' ')}
                   </span>
-                  <span className="text-xs font-bold text-cyprus dark:text-sand text-right">{String(val)}</span>
+                  <span className="text-xs font-bold text-cyprus dark:text-sand text-right">
+                    {Array.isArray(val) ? val.join(', ') : String(val)}
+                  </span>
                 </div>
               ))}
             </div>
@@ -159,15 +172,82 @@ export default function AnalyticsPage() {
       {/* AI Progress Report */}
       {(report || generating) && (
         <div className="mt-6 bg-white dark:bg-cyprus-light border border-cyprus/8 dark:border-sand/8 rounded-2xl p-5">
-          <h2 className="font-display font-bold text-base text-cyprus dark:text-sand mb-3">AI Progress Report</h2>
+          <h2 className="font-display font-bold text-base text-cyprus dark:text-sand mb-4">AI Progress Report</h2>
+
           {generating ? (
             <div className="flex items-center gap-3 py-4">
               <Loader size={20} className="animate-spin text-cyprus dark:text-sand" />
               <p className="text-sm text-cyprus/60 dark:text-sand/60">Generating your personalized report…</p>
             </div>
-          ) : report?.report ? (
-            <div className="prose prose-sm max-w-none">
-              <p className="text-sm text-cyprus/80 dark:text-sand/80 leading-relaxed whitespace-pre-wrap">{report.report}</p>
+          ) : report ? (
+            <div className="space-y-5">
+
+              {/* Period */}
+              <div className="flex items-center gap-2 text-xs text-cyprus/50 dark:text-sand/50">
+                <span>{report.week_start}</span>
+                <span>→</span>
+                <span>{report.week_end}</span>
+                <span className="ml-auto">{report.logs_analysed} log{report.logs_analysed !== 1 ? 's' : ''} analysed · target {report.calorie_target_used} kcal</span>
+              </div>
+
+              {/* Key stats */}
+              <div className="grid grid-cols-3 gap-3">
+                {[
+                  { label: 'Avg Adherence', value: `${Math.round(report.avg_adherence_pct)}%` },
+                  { label: 'Best Day',      value: report.best_day  },
+                  { label: 'Worst Day',     value: report.worst_day },
+                ].map(({ label, value }) => (
+                  <div key={label} className="bg-cyprus/5 dark:bg-sand/5 rounded-xl p-3 text-center">
+                    <div className="font-display font-bold text-sm text-cyprus dark:text-sand">{value}</div>
+                    <div className="text-[10px] text-cyprus/50 dark:text-sand/50 mt-0.5">{label}</div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Goal Progress */}
+              {report.goal_progress && (
+                <div>
+                  <h3 className="text-xs font-bold uppercase tracking-wide text-cyprus/40 dark:text-sand/40 mb-1">Goal Progress</h3>
+                  <p className="text-sm text-cyprus/80 dark:text-sand/80 leading-relaxed">{report.goal_progress}</p>
+                </div>
+              )}
+
+              {/* Patterns */}
+              {report.patterns_identified?.length > 0 && (
+                <div>
+                  <h3 className="text-xs font-bold uppercase tracking-wide text-cyprus/40 dark:text-sand/40 mb-2">Patterns Identified</h3>
+                  <ul className="space-y-1.5">
+                    {report.patterns_identified.map((p, i) => (
+                      <li key={i} className="flex items-start gap-2 text-sm text-cyprus/80 dark:text-sand/80">
+                        <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-cyprus/40 dark:bg-sand/40 shrink-0" />
+                        {p}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* Recommendations */}
+              {report.recommendations?.length > 0 && (
+                <div>
+                  <h3 className="text-xs font-bold uppercase tracking-wide text-cyprus/40 dark:text-sand/40 mb-2">Recommendations</h3>
+                  <ul className="space-y-1.5">
+                    {report.recommendations.map((r, i) => (
+                      <li key={i} className="flex items-start gap-2 text-sm text-cyprus/80 dark:text-sand/80">
+                        <span className="mt-1 text-cyprus/60 dark:text-sand/60">→</span>
+                        {r}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* Motivational note */}
+              {report.motivational_note && (
+                <div className="bg-cyprus/5 dark:bg-sand/5 rounded-xl px-4 py-3">
+                  <p className="text-sm italic text-cyprus/70 dark:text-sand/70 leading-relaxed">"{report.motivational_note}"</p>
+                </div>
+              )}
             </div>
           ) : null}
         </div>

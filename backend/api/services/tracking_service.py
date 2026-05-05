@@ -23,6 +23,7 @@ from sqlalchemy.orm import Session
 from db.models import User, UserFeedback, MealLog
 from db.repositories import UserRepository, ProgressRepository
 from schemas.nutrition_schemas import MealLogEntry
+from cache.memory_cache import mem_cache, TTL_ADHERENCE
 from api.schemas.tracking_schemas import (
     SubmitFeedbackRequest, FeedbackResponse, FeedbackListResponse,
     LogMealRequest, MealLogResponse, MealLogListResponse,
@@ -70,16 +71,26 @@ def submit_feedback(
     # ── Resume graph → learning_loop_node ─────────────────────────────────────
     learning_loop_triggered = False
 
-    if payload.thread_id:
+    # Resolve thread_id: prefer the one sent in the request; fall back to
+    # the one stored on the recipe row (persisted at generation time).
+    thread_id = payload.thread_id
+    if not thread_id and recipe.thread_id:
+        thread_id = recipe.thread_id
+        logger.info(
+            "No thread_id in request — using stored thread_id '%s' from recipe '%s'.",
+            thread_id, payload.recipe_id,
+        )
+
+    if thread_id:
         learning_loop_triggered = _resume_graph_for_learning(
-            thread_id = payload.thread_id,
+            thread_id = thread_id,
             rating    = payload.rating,
             comment   = payload.comment,
         )
     else:
         logger.info(
-            "No thread_id provided — skipping learning loop. "
-            "Pass thread_id from POST /recipes/generate to enable it."
+            "No thread_id available for recipe '%s' — skipping learning loop.",
+            payload.recipe_id,
         )
 
     return FeedbackResponse(
@@ -245,6 +256,9 @@ def log_meal(
         user.id, payload.log_date, payload.meal_slot, payload.dish_name, payload.calories,
     )
 
+    # Bust cached adherence for this user — data has changed
+    mem_cache.delete_prefix(f"adherence:{user.id}:")
+
     # Fetch the saved row to get logged_at timestamp
     row = db.query(MealLog).filter_by(id=log_id).first()
     return MealLogResponse(
@@ -337,6 +351,8 @@ def delete_meal_log(
     db.delete(row)
     db.flush()
     logger.info("Meal log %s deleted by user %s", log_id, user_id)
+    # Bust cached adherence — data has changed
+    mem_cache.delete_prefix(f"adherence:{user_id}:")
     return True
 
 
@@ -349,6 +365,7 @@ def get_adherence(
     """
     Return daily calorie adherence for the last N days.
     Calorie target is loaded from the user's current goal if not provided.
+    Results are cached for TTL_ADHERENCE seconds and busted on any meal write.
     """
     from db.models import UserGoal
     from db.repositories import UserRepository
@@ -359,10 +376,16 @@ def get_adherence(
         goal = repo.get_current_goal(user_id)
         calorie_target = goal.calorie_target if goal else 2000
 
-    prog_repo  = ProgressRepository(db)
-    adherence  = prog_repo.get_daily_adherence(user_id, calorie_target, days=days)
+    cache_key = f"adherence:{user_id}:{days}:{calorie_target}"
+    cached = mem_cache.get(cache_key)
+    if cached is not None:
+        logger.debug("Adherence cache HIT for user %s (days=%d)", user_id, days)
+        return cached
 
-    return [
+    prog_repo = ProgressRepository(db)
+    adherence = prog_repo.get_daily_adherence(user_id, calorie_target, days=days)
+
+    result = [
         DailyAdherenceResponse(
             log_date         = a.log_date,
             planned_calories = a.planned_calories,
@@ -373,3 +396,6 @@ def get_adherence(
         )
         for a in adherence
     ]
+
+    mem_cache.set(cache_key, result, ttl=TTL_ADHERENCE)
+    return result

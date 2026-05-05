@@ -14,6 +14,7 @@ from state import NutritionState
 from schemas.nutrition_schemas import MedicalCondition, MacroSplit
 from db.models import User
 from db.repositories import UserRepository, RecipeRepository
+from cache.memory_cache import mem_cache, TTL_RECIPE, TTL_RECIPE_LIST
 from nodes.health_goal  import health_goal_node
 from nodes.followup     import followup_node
 from pipeline.nutrition_graph import nutrition_graph
@@ -302,6 +303,7 @@ async def generate_recipe_stream(
                 source      = "generated",
                 explanation = final_state.recipe_explanation,
                 user_id     = user.id,
+                thread_id   = thread_id,
             )
             db.flush()
 
@@ -311,6 +313,9 @@ async def generate_recipe_stream(
                 "   🗸   Recipe '%s' saved (id=%s, thread=%s) for user %s",
                 final_state.final_recipe.dish_name, recipe_id, thread_id, user.id,
             )
+
+            # Bust recipe list cache — new recipe now exists for this user
+            mem_cache.delete_prefix(f"recipe_list:{user.id}:")
 
             response     = _build_response(final_state, recipe_id, thread_id=thread_id)
             result_event = json.dumps({
@@ -369,6 +374,7 @@ async def generate_recipe(
         source      = "generated",
         explanation = final_state.recipe_explanation,
         user_id     = user.id,
+        thread_id   = thread_id,
     )
     db.flush()
 
@@ -385,6 +391,9 @@ async def generate_recipe(
         "   🗸   Recipe '%s' saved (id=%s, thread=%s) for user %s",
         final_state.final_recipe.dish_name, recipe_id, thread_id, user.id,
     )
+
+    # Bust recipe list cache — new recipe now exists for this user
+    mem_cache.delete_prefix(f"recipe_list:{user.id}:")
 
     return _build_response(final_state, recipe_id, thread_id=thread_id)
 
@@ -506,6 +515,9 @@ async def followup_recipe(
     logger.info("   🗸   Modified recipe saved (id=%s, thread=%s) for user %s",
                 new_recipe_id, mod_thread_id, user.id)
 
+    # Bust recipe list cache — modified recipe is a new row for this user
+    mem_cache.delete_prefix(f"recipe_list:{user.id}:")
+
     return FollowupResponse(
         intent           = "modify",
         answer           = None,
@@ -519,6 +531,12 @@ async def followup_recipe(
 def get_recipe_by_id(recipe_id: str, db: Session) -> Optional[RecipeResponse]:
     """Fetch a single recipe by its DB id — full detail including ingredients and steps."""
     from db.models import Recipe as RecipeModel, RecipeNutrition, RecipeIngredient, RecipeStep
+
+    cache_key = f"recipe:{recipe_id}"
+    cached = mem_cache.get(cache_key)
+    if cached is not None:
+        logger.debug("Recipe cache HIT: %s", recipe_id)
+        return cached
 
     row = db.query(RecipeModel).filter_by(id=recipe_id).first()
     if not row:
@@ -545,7 +563,7 @@ def get_recipe_by_id(recipe_id: str, db: Session) -> Optional[RecipeResponse]:
         sugar_g    = nutrition.sugar_g    if nutrition else None,
     ) if nutrition else NutritionOut(calories=0, protein_g=0, carbs_g=0, fat_g=0)
 
-    return RecipeResponse(
+    result = RecipeResponse(
         recipe_id         = row.id,
         dish_name         = row.name,
         cuisine           = row.cuisine,
@@ -564,8 +582,11 @@ def get_recipe_by_id(recipe_id: str, db: Session) -> Optional[RecipeResponse]:
         calorie_target    = 0,
         macro_split       = {},
         from_cache        = False,
-        thread_id         = None,   # historical recipe — no active graph thread
+        thread_id         = row.thread_id,
     )
+
+    mem_cache.set(cache_key, result, ttl=TTL_RECIPE)
+    return result
 
 
 def list_user_recipes(
@@ -580,9 +601,15 @@ def list_user_recipes(
     """
     from db.models import Recipe as RecipeModel, RecipeNutrition
 
+    cache_key = f"recipe_list:{user_id}:{page}:{limit}"
+    cached = mem_cache.get(cache_key)
+    if cached is not None:
+        logger.debug("Recipe list cache HIT: user=%s page=%d", user_id, page)
+        return cached
+
     offset = (page - 1) * limit
 
-    base = db.query(RecipeModel).filter(RecipeModel.user_id == user_id)
+    base  = db.query(RecipeModel).filter(RecipeModel.user_id == user_id)
     total = base.count()
     rows  = (
         base.order_by(RecipeModel.generated_at.desc())
@@ -605,9 +632,12 @@ def list_user_recipes(
             fat_g     = nutrition.fat_g     if nutrition else 0.0,
         ))
 
-    return RecipeListResponse(
+    result = RecipeListResponse(
         recipes = summaries,
         total   = total,
         page    = page,
         limit   = limit,
     )
+
+    mem_cache.set(cache_key, result, ttl=TTL_RECIPE_LIST)
+    return result

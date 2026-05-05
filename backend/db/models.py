@@ -173,6 +173,7 @@ class Recipe(Base):
     source:       Mapped[str]      = mapped_column(String(20), default="generated")  # generated / manual / image
     generated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     prep_time_minutes: Mapped[int|None] = mapped_column(Integer, nullable=True)
+    thread_id:    Mapped[str|None] = mapped_column(String(100), nullable=True, index=True)
 
     # Relationships
     user:        Mapped["User | None"]           = relationship("User")

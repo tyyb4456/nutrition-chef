@@ -20,6 +20,7 @@ from typing import Optional
 from sqlalchemy.orm import Session
 
 from db.models import User, UserFeedback
+from cache.memory_cache import mem_cache, TTL_PREFERENCES, TTL_PROGRESS_REPORT
 from db.repositories import (
     UserRepository,
     ProgressRepository,
@@ -203,15 +204,30 @@ async def generate_progress_report(
         calorie_target_used = calorie_target,
     )
 
-    # ── Cache report so GET doesn't re-run the LLM ───────────────────────────
+    # ── Persist to DB so GET survives restarts ────────────────────────────────
     _save_report_to_prefs(user.id, response, db)
+
+    # ── Update in-memory cache so the next GET is instant ────────────────────
+    mem_cache.set(f"progress_report:{user.id}", response, ttl=TTL_PROGRESS_REPORT)
 
     return response
 
 
 def get_saved_progress_report(user_id: str, db: Session) -> ProgressReportResponse | None:
-    """Return the last generated report without hitting the LLM."""
-    return _load_report_from_prefs(user_id, db)
+    """
+    Return the last generated report without hitting the LLM.
+    Checks in-memory cache first; falls back to DB (user_preferences row).
+    """
+    cache_key = f"progress_report:{user_id}"
+    cached = mem_cache.get(cache_key)
+    if cached is not None:
+        logger.debug("Progress report cache HIT for user %s", user_id)
+        return cached
+
+    report = _load_report_from_prefs(user_id, db)
+    if report:
+        mem_cache.set(cache_key, report, ttl=TTL_PROGRESS_REPORT)
+    return report
 
 # ═══════════════════════════════════════════════════════════════
 # LEARNED PREFERENCES
@@ -221,9 +237,17 @@ def get_learned_preferences(
     user_id: str,
     db: Session,
 ) -> LearnedPreferencesResponse:
-    repo  = LearnedPreferencesRepository(db)
-    prefs = repo.load(user_id)
-    return _prefs_to_response(prefs) if prefs else _empty_prefs()
+    cache_key = f"preferences:{user_id}"
+    cached = mem_cache.get(cache_key)
+    if cached is not None:
+        logger.debug("Preferences cache HIT for user %s", user_id)
+        return cached
+
+    repo   = LearnedPreferencesRepository(db)
+    prefs  = repo.load(user_id)
+    result = _prefs_to_response(prefs) if prefs else _empty_prefs()
+    mem_cache.set(cache_key, result, ttl=TTL_PREFERENCES)
+    return result
 
 
 def update_learned_preferences(
@@ -251,7 +275,11 @@ def update_learned_preferences(
     db.flush()
 
     logger.info("Learned preferences manually updated for user %s", user_id)
-    return _prefs_to_response(merged)
+
+    result = _prefs_to_response(merged)
+    # Update cache immediately so next read is consistent
+    mem_cache.set(f"preferences:{user_id}", result, ttl=TTL_PREFERENCES)
+    return result
 
 
 def reset_learned_preferences(
@@ -263,6 +291,8 @@ def reset_learned_preferences(
     db.query(LPModel).filter_by(user_id=user_id).delete()
     db.flush()
     logger.info("Learned preferences reset for user %s", user_id)
+    # Bust cache so next read reflects the reset
+    mem_cache.delete(f"preferences:{user_id}")
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -313,6 +343,9 @@ async def trigger_learning(
     goal_updated = bool(
         state.learned_preferences and state.learned_preferences.goal_refinement
     )
+
+    # Bust preferences cache — learning loop just wrote new values to DB
+    mem_cache.delete(f"preferences:{user.id}")
 
     return TriggerLearningResponse(
         message             = "Learning loop completed. Preferences updated.",
