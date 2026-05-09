@@ -202,6 +202,9 @@ def recipe_generator_node(state: NutritionState) -> dict:
     )
 
     # ── 4. LLM call ───────────────────────────────────────────────────────────
+    from langgraph.config import get_stream_writer
+    writer = get_stream_writer()
+    writer({"status": "Crafting your personalised recipe with Gemini…"})
     recipe: RecipeOutput = llm.invoke(messages)
 
     logger.info(f"   🗸   Recipe generated: '{recipe.dish_name}'")

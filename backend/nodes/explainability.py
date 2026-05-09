@@ -51,6 +51,10 @@ Keep tone friendly, professional, and easy to understand — like talking to a h
 
 def explainability_node(state: NutritionState) -> dict:
     logger.info("\n Generating recipe explanation...")
+    from langgraph.config import get_stream_writer
+    writer = get_stream_writer()
+    writer({"status": "Writing a personalised AI explanation for your recipe…"})
+
 
     recipe = state.final_recipe
     if recipe is None:

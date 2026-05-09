@@ -50,6 +50,9 @@ def _check_allergens_in_recipe(recipe, allergies: list[str]) -> tuple[bool, list
 
 def nutrition_validation_node(state: NutritionState) -> dict:
     logger.info("\nValidating nutritional alignment...")
+    from langgraph.config import get_stream_writer
+    writer = get_stream_writer()
+    writer({"status": "Validating calories, macros, fibre and allergen safety…"})
 
     # ── Determine which recipe to validate ───────────────────────────────────
     if state.adjusted_by_macro_agent and state.macro_adjustment_output:

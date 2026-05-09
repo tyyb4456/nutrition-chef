@@ -182,6 +182,9 @@ def _apply_medical_calorie_adjustments(
 
 def health_goal_node(state: NutritionState) -> dict:
     logger.info("\n Calculating science-based dietary requirements...")
+    from langgraph.config import get_stream_writer
+    writer = get_stream_writer()
+    writer({"status": "Analysing your profile and calculating calorie targets…"})
 
     goal_type  = _classify_goal(state.fitness_goal or "")
     age        = state.age or 25

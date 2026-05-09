@@ -62,6 +62,9 @@ Instructions:
 
 def macro_adjustment_node(state: NutritionState) -> dict:
     logger.info(f" Adjusting macros (attempt {state.retry_count + 1})...")
+    from langgraph.config import get_stream_writer
+    writer = get_stream_writer()
+    writer({"status": f"Fine-tuning macro ratios (attempt {state.retry_count + 1})…"})
 
     if state.macro_adjustment_output:
         recipe = state.macro_adjustment_output.adjusted_recipe

@@ -50,6 +50,9 @@ Instructions:
 
 def substitution_node(state: NutritionState) -> dict:
     logger.info("\n Checking recipe for allergen/preference conflicts...")
+    from langgraph.config import get_stream_writer
+    writer = get_stream_writer()
+    writer({"status": "Scanning for allergens and making safe substitutions…"})
 
     # Use the macro-adjusted recipe if available, else original
     if state.adjusted_by_macro_agent and state.macro_adjustment_output:

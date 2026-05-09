@@ -260,15 +260,40 @@ async def generate_recipe_stream(
             for chunk in nutrition_graph.stream(
                 state,
                 config=config,
-                stream_mode="updates",
+                stream_mode=["updates", "custom", "messages"],
+                version="v2",
             ):
-                for node_name in chunk:
-                    label = _NODE_LABELS.get(node_name)
-                    if label:
+                chunk_type = chunk.get("type")
+
+                # ── Custom writer events (status strings from inside nodes) ──
+                if chunk_type == "custom":
+                    data = chunk.get("data", {})
+                    if isinstance(data, dict) and "status" in data:
                         loop.call_soon_threadsafe(
                             queue.put_nowait,
-                            {"type": "progress", "step": node_name, "message": label},
+                            {"type": "status", "message": data["status"]},
                         )
+
+                # ── Node-completion events ────────────────────────────────────
+                elif chunk_type == "updates":
+                    for node_name in chunk.get("data", {}):
+                        label = _NODE_LABELS.get(node_name)
+                        if label:
+                            loop.call_soon_threadsafe(
+                                queue.put_nowait,
+                                {"type": "progress", "step": node_name, "message": label},
+                            )
+
+                # ── Token-level LLM streaming ─────────────────────────────────
+                elif chunk_type == "messages":
+                    msg, metadata = chunk.get("data", (None, None))
+                    if msg and hasattr(msg, "content") and msg.content:
+                        node = metadata.get("langgraph_node", "") if metadata else ""
+                        loop.call_soon_threadsafe(
+                            queue.put_nowait,
+                            {"type": "token", "content": msg.content, "node": node},
+                        )
+
             # Graph paused at feedback interrupt — read final state from checkpointer
             snapshot    = nutrition_graph.get_state(config)
             final_state = NutritionState(**snapshot.values) if snapshot else None

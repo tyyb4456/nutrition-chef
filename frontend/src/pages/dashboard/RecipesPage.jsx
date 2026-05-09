@@ -42,6 +42,81 @@ function StarPicker({ value, onChange, disabled }) {
   )
 }
 
+/* ── Markdown renderer ───────────────────────────────────────────────────── */
+function MarkdownContent({ text }) {
+  const renderInline = (str) => {
+    // Bold: **text** or __text__
+    const parts = str.split(/(\*\*[^*]+\*\*|__[^_]+__)/g)
+    return parts.map((part, i) => {
+      if (/^\*\*(.+)\*\*$/.test(part)) return <strong key={i} className="font-semibold text-cyprus dark:text-sand">{part.slice(2, -2)}</strong>
+      if (/^__(.+)__$/.test(part)) return <strong key={i} className="font-semibold text-cyprus dark:text-sand">{part.slice(2, -2)}</strong>
+      return part
+    })
+  }
+
+  const lines = text.split('\n')
+  const elements = []
+  let i = 0
+
+  while (i < lines.length) {
+    const line = lines[i]
+
+    // Skip separator lines like ---
+    if (/^---+$/.test(line.trim())) { i++; continue }
+
+    // H3: ###
+    if (line.startsWith('### ')) {
+      elements.push(
+        <h3 key={i} className="text-sm font-bold text-cyprus dark:text-sand mt-3 mb-1">
+          {renderInline(line.slice(4))}
+        </h3>
+      )
+    }
+    // H2: ##
+    else if (line.startsWith('## ')) {
+      elements.push(
+        <h2 key={i} className="text-sm font-bold text-cyprus dark:text-sand mt-3 mb-1">
+          {renderInline(line.slice(3))}
+        </h2>
+      )
+    }
+    // Bullet: * or -
+    else if (/^[\*\-] /.test(line)) {
+      elements.push(
+        <div key={i} className="flex gap-2 text-sm text-cyprus/70 dark:text-sand/70 leading-relaxed">
+          <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-cyprus/40 dark:bg-sand/40 shrink-0" />
+          <span>{renderInline(line.slice(2))}</span>
+        </div>
+      )
+    }
+    // Numbered list: 1. 2. etc
+    else if (/^\d+\. /.test(line)) {
+      const num = line.match(/^(\d+)\. /)[1]
+      elements.push(
+        <div key={i} className="flex gap-2.5 text-sm text-cyprus/70 dark:text-sand/70 leading-relaxed">
+          <span className="shrink-0 w-5 h-5 rounded-full bg-cyprus/10 dark:bg-sand/10 text-cyprus dark:text-sand text-[10px] font-bold flex items-center justify-center mt-0.5">{num}</span>
+          <span>{renderInline(line.replace(/^\d+\. /, ''))}</span>
+        </div>
+      )
+    }
+    // Empty line → spacing
+    else if (line.trim() === '') {
+      elements.push(<div key={i} className="h-1.5" />)
+    }
+    // Regular paragraph
+    else {
+      elements.push(
+        <p key={i} className="text-sm text-cyprus/70 dark:text-sand/70 leading-relaxed">
+          {renderInline(line)}
+        </p>
+      )
+    }
+    i++
+  }
+
+  return <div className="space-y-1">{elements}</div>
+}
+
 /* ── Feedback panel (inside detail drawer) ───────────────────────────────── */
 function FeedbackPanel({ recipeId, threadId }) {
   const [existing, setExisting] = useState(null)   // already-submitted feedback
@@ -312,8 +387,8 @@ function RecipeDetail({ recipeId, initialRecipe, onClose }) {
             {/* AI explanation */}
             {recipe?.explanation && (
               <div className="bg-cyprus/5 dark:bg-sand/5 rounded-xl p-4 border border-cyprus/10 dark:border-sand/10">
-                <h3 className="text-xs font-bold uppercase tracking-wider text-cyprus/50 dark:text-sand/50 mb-1.5">AI Explanation</h3>
-                <p className="text-sm text-cyprus/70 dark:text-sand/70 leading-relaxed">{recipe.explanation}</p>
+                <h3 className="text-xs font-bold uppercase tracking-wider text-cyprus/50 dark:text-sand/50 mb-2">AI Explanation</h3>
+                <MarkdownContent text={recipe.explanation} />
               </div>
             )}
 
@@ -409,6 +484,8 @@ export default function RecipesPage() {
   const [generating, setGenerating] = useState(false)
   const [completedSteps, setCompletedSteps] = useState([])
   const [activeStep, setActiveStep] = useState(null)
+  const [streamStatus, setStreamStatus] = useState('')
+  const [streamTokens, setStreamTokens] = useState('')
   const [error, setError] = useState('')
 
   const [form, setForm] = useState({
@@ -430,6 +507,8 @@ export default function RecipesPage() {
     setError('')
     setCompletedSteps([])
     setActiveStep(RECIPE_STEPS[0].key)
+    setStreamStatus('')
+    setStreamTokens('')
 
     const req = {
       meal_type: form.meal_type,
@@ -439,7 +518,13 @@ export default function RecipesPage() {
 
     try {
       await recipeService.generateStream(req, (event) => {
-        if (event.type === 'progress') {
+        if (event.type === 'status') {
+          setStreamStatus(event.message)
+        } else if (event.type === 'token') {
+          setStreamTokens(prev => prev + event.content)
+        } else if (event.type === 'progress') {
+          setStreamStatus('')
+          setStreamTokens('')
           setCompletedSteps(prev => [...prev, event.step])
           const idx = RECIPE_STEPS.findIndex(s => s.key === event.step)
           const next = RECIPE_STEPS[idx + 1]
@@ -473,6 +558,8 @@ export default function RecipesPage() {
       setGenerating(false)
       setActiveStep(null)
       setCompletedSteps([])
+      setStreamStatus('')
+      setStreamTokens('')
     }
   }
 
@@ -547,31 +634,52 @@ export default function RecipesPage() {
             </div>
           </form>
           {generating && (
-            <div className="mt-4 space-y-1.5">
-              {RECIPE_STEPS.map(step => {
-                const done = completedSteps.includes(step.key)
-                const active = activeStep === step.key
-                return (
-                  <div
-                    key={step.key}
-                    className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs transition-all ${done
-                        ? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300'
-                        : active
-                          ? 'bg-cyprus/8 dark:bg-sand/8 text-cyprus dark:text-sand font-semibold'
-                          : 'text-cyprus/30 dark:text-sand/30'
-                      }`}
-                  >
-                    {done ? (
-                      <CheckCircle size={13} className="text-green-500 shrink-0" />
-                    ) : active ? (
-                      <Loader size={13} className="animate-spin shrink-0" />
-                    ) : (
-                      <span className="w-3.5 h-3.5 rounded-full border border-cyprus/20 dark:border-sand/20 shrink-0" />
-                    )}
-                    {step.label}
-                  </div>
-                )
-              })}
+            <div className="mt-4 space-y-3">
+              {/* Step tracker */}
+              <div className="space-y-1.5">
+                {RECIPE_STEPS.map(step => {
+                  const done = completedSteps.includes(step.key)
+                  const active = activeStep === step.key
+                  return (
+                    <div
+                      key={step.key}
+                      className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs transition-all ${done
+                          ? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300'
+                          : active
+                            ? 'bg-cyprus/8 dark:bg-sand/8 text-cyprus dark:text-sand font-semibold'
+                            : 'text-cyprus/30 dark:text-sand/30'
+                        }`}
+                    >
+                      {done ? (
+                        <CheckCircle size={13} className="text-green-500 shrink-0" />
+                      ) : active ? (
+                        <Loader size={13} className="animate-spin shrink-0" />
+                      ) : (
+                        <span className="w-3.5 h-3.5 rounded-full border border-cyprus/20 dark:border-sand/20 shrink-0" />
+                      )}
+                      {step.label}
+                    </div>
+                  )
+                })}
+              </div>
+
+              {/* Live status message from inside nodes */}
+              {streamStatus && (
+                <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-cyprus/5 dark:bg-sand/5 border border-cyprus/10 dark:border-sand/10">
+                  <Loader size={11} className="animate-spin text-cyprus/40 dark:text-sand/40 shrink-0" />
+                  <span className="text-[11px] text-cyprus/60 dark:text-sand/60 italic">{streamStatus}</span>
+                </div>
+              )}
+
+              {/* Live token output — shown while the LLM is streaming */}
+              {streamTokens && (
+                <div className="px-3 py-2.5 rounded-xl bg-white dark:bg-cyprus-light border border-cyprus/10 dark:border-sand/10 max-h-32 overflow-y-auto">
+                  <p className="text-[11px] text-cyprus/70 dark:text-sand/70 font-mono leading-relaxed whitespace-pre-wrap break-words">
+                    {streamTokens}
+                    <span className="inline-block w-1.5 h-3.5 bg-cyprus/40 dark:bg-sand/40 ml-0.5 animate-pulse align-middle" />
+                  </p>
+                </div>
+              )}
             </div>
           )}
         </div>
