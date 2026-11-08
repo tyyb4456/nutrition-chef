@@ -6,6 +6,7 @@ from __future__ import annotations
 import base64
 import logging
 from concurrent.futures import ThreadPoolExecutor
+from functools import lru_cache
 from datetime import date
 from typing import Optional
 
@@ -13,8 +14,7 @@ from sqlalchemy.orm import Session
 
 from db.models import User
 from db.repositories import ProgressRepository
-from schemas.nutrition_schemas import FoodImageAnalysis, MealLogEntry, NutritionFacts
-from langchain.chat_models import init_chat_model
+from graph.nutrition_schemas import FoodImageAnalysis, MealLogEntry, NutritionFacts
 from langchain_core.messages import HumanMessage
 from api.schemas.image_schemas import (
     AnalyseImageRequest,
@@ -22,14 +22,17 @@ from api.schemas.image_schemas import (
     IdentifiedFoodItemOut,
     NutritionEstimateOut,
 )
+from graph.llm import build_xkiro_llm
 
 logger = logging.getLogger(__name__)
 
 _executor = ThreadPoolExecutor(max_workers=4)
 
-# ── Gemini vision model ───────────────────────────────────────────────────────
-model = init_chat_model("google_genai:gemini-2.5-flash")
-llm   = model.with_structured_output(FoodImageAnalysis)
+# ── xKiro vision model ───────────────────────────────────────────────────────
+@lru_cache(maxsize=1)
+def _get_llm():
+    model = build_xkiro_llm()
+    return model.with_structured_output(FoodImageAnalysis)
 
 IMAGE_SYSTEM_PROMPT = """
 You are an expert food nutritionist with computer vision capabilities.
@@ -109,7 +112,7 @@ def _call_vision_llm(b64_string: str, mime_type: str) -> FoodImageAnalysis:
             },
         ]
     )
-    return llm.invoke([message])
+    return _get_llm().invoke([message])
 
 
 # ═══════════════════════════════════════════════════════════════

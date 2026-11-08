@@ -3,7 +3,7 @@
 from typing import Dict, Any, Optional
 from pydantic import BaseModel, Field
 
-from schemas.nutrition_schemas import (
+from graph.nutrition_schemas import (
     MedicalCondition,
     MacroSplit,
     AgeProfile,

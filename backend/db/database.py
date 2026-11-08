@@ -101,13 +101,13 @@ def create_tables() -> None:
     Use Alembic migrations in production — this is for dev/testing only.
     """
     Base.metadata.create_all(bind=engine)
-    print("✅ Database tables created.")
+    print("Database tables created.")
 
 
 def drop_tables() -> None:
     """Drop all tables. DANGEROUS — dev/test only."""
     Base.metadata.drop_all(bind=engine)
-    print("⚠️ All tables dropped.")
+    print("All tables dropped.")
 
 if __name__ == "__main__":
     # Run this file directly to create tables in the database.

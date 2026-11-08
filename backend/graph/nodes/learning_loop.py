@@ -4,18 +4,21 @@
 from __future__ import annotations
 
 import logging
+from functools import lru_cache
 
-from state import NutritionState
-from schemas.nutrition_schemas import LearnedPreferences
-from langchain.chat_models import init_chat_model
+from graph.state import NutritionState
+from graph.nutrition_schemas import LearnedPreferences
+from graph.llm import build_xkiro_llm
 from langchain_core.prompts import ChatPromptTemplate
 from dotenv import load_dotenv
 
 load_dotenv()
 logger = logging.getLogger(__name__)
 
-model = init_chat_model("google_genai:gemini-2.5-flash")
-llm   = model.with_structured_output(LearnedPreferences)
+@lru_cache(maxsize=1)
+def _get_llm():
+    model = build_xkiro_llm()
+    return model.with_structured_output(LearnedPreferences)
 
 LEARNING_PROMPT = ChatPromptTemplate.from_template("""
 You are a behavioral nutritionist and learning agent.
@@ -133,7 +136,7 @@ def learning_loop_node(state: NutritionState) -> dict:
         prev_insights="; ".join(existing.session_insights)  if existing else "none",
     )
 
-    new_prefs: LearnedPreferences = llm.invoke(messages)
+    new_prefs: LearnedPreferences = _get_llm().invoke(messages)
 
     # ── Merge with existing ───────────────────────────────────────────────────
     if existing:
@@ -153,7 +156,7 @@ def learning_loop_node(state: NutritionState) -> dict:
     # ── Persist to DB + ChromaDB ──────────────────────────────────────────────
     user_id = state.customer_id or state.name or "anonymous"
     try:
-        from memory.progress_store import save_learned_preferences
+        from graph.progress_store import save_learned_preferences
         save_learned_preferences(user_id, merged)
         logger.info("   🗸  Learned preferences saved to DB.")
     except Exception as e:

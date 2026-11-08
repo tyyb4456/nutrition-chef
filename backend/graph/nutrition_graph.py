@@ -10,15 +10,16 @@ from langgraph.graph import StateGraph, START, END
 from langgraph.checkpoint.postgres import PostgresSaver
 from psycopg_pool import ConnectionPool
 
-from state import NutritionState
-from nodes.health_goal        import health_goal_node
-from nodes.generate_recipe    import recipe_generator_node
-from nodes.validate_nutrition import nutrition_validation_node
-from nodes.macro_adjustment   import macro_adjustment_node
-from nodes.substitution       import substitution_node
-from nodes.explainability     import explainability_node
-from nodes.feedback           import feedback_node
-from nodes.learning_loop      import learning_loop_node
+from graph.state import NutritionState
+from graph.nodes.health_goal        import health_goal_node
+from graph.nodes.generate_recipe    import recipe_generator_node
+from graph.nodes.validate_nutrition import nutrition_validation_node
+from graph.nodes.macro_adjustment   import macro_adjustment_node
+from graph.nodes.substitution       import substitution_node
+from graph.nodes.explainability     import explainability_node
+from graph.nodes.feedback           import feedback_node
+from graph.nodes.learning_loop      import learning_loop_node
+
 
 logger = logging.getLogger(__name__)
 
@@ -182,7 +183,7 @@ def close_pool() -> None:
         @asynccontextmanager
         async def lifespan(app: FastAPI):
             yield
-            from pipeline.nutrition_graph import close_pool
+            from graph.nutrition_graph import close_pool
             close_pool()
     """
     if _pool is not None and not _pool.closed:

@@ -5,19 +5,22 @@
 from __future__ import annotations
 
 import logging
+from functools import lru_cache
 
-from state import NutritionState
-from schemas.nutrition_schemas import RecipeOutput
-from memory.recipe_context_store import retrieve_context
-from langchain.chat_models import init_chat_model
+from graph.state import NutritionState
+from graph.nutrition_schemas import RecipeOutput
+from graph.rag_pipeline import retrieve_context
+from graph.llm import build_xkiro_llm
 from langchain_core.prompts import ChatPromptTemplate
 from dotenv import load_dotenv
 
 load_dotenv()
 logger = logging.getLogger(__name__)
 
-model = init_chat_model("google_genai:gemini-2.5-flash")
-llm   = model.with_structured_output(RecipeOutput)
+@lru_cache(maxsize=1)
+def _get_llm():
+    model = build_xkiro_llm()
+    return model.with_structured_output(RecipeOutput)
 
 RECIPE_PROMPT = ChatPromptTemplate.from_template("""
 You are a world-class AI chef and certified nutritionist.
@@ -205,7 +208,7 @@ def recipe_generator_node(state: NutritionState) -> dict:
     from langgraph.config import get_stream_writer
     writer = get_stream_writer()
     writer({"status": "Crafting your personalised recipe with Gemini…"})
-    recipe: RecipeOutput = llm.invoke(messages)
+    recipe: RecipeOutput = _get_llm().invoke(messages)
 
     logger.info(f"   🗸   Recipe generated: '{recipe.dish_name}'")
     logger.info(f"      {recipe.nutrition.calories} kcal | "

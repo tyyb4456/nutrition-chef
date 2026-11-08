@@ -2,23 +2,25 @@
 agents/macro_adjustment_agent.py
 
 Adjusts the recipe's macro balance when validation fails.
-Phase 2: updated to use gemini-2.5-flash via init_chat_model.
 """
 
-from state import NutritionState
-from schemas.nutrition_schemas import MacroAdjustmentOutput
-from langchain.chat_models import init_chat_model
+from graph.state import NutritionState
+from graph.nutrition_schemas import MacroAdjustmentOutput
+from graph.llm import build_xkiro_llm
 from langchain_core.prompts import ChatPromptTemplate
 from dotenv import load_dotenv
 
 load_dotenv()
 
 import logging
+from functools import lru_cache
 logger = logging.getLogger(__name__)
 
 
-model = init_chat_model("google_genai:gemini-2.5-flash")
-llm   = model.with_structured_output(MacroAdjustmentOutput)
+@lru_cache(maxsize=1)
+def _get_llm():
+    model = build_xkiro_llm()
+    return model.with_structured_output(MacroAdjustmentOutput)
 
 MACRO_PROMPT = ChatPromptTemplate.from_template("""
 You are an AI Nutrition Coach and Recipe Optimizer.
@@ -99,7 +101,7 @@ def macro_adjustment_node(state: NutritionState) -> dict:
         medical_conditions=conditions_str,
     )
 
-    result: MacroAdjustmentOutput = llm.invoke(messages)
+    result: MacroAdjustmentOutput = _get_llm().invoke(messages)
 
     logger.info(f"   Adjusted: '{result.adjusted_recipe.dish_name}'")
     logger.info(f"   Notes: {result.adjustment_notes}")

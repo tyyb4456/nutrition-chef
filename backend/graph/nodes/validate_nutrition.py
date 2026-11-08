@@ -1,8 +1,8 @@
 # nodes/nutrition_validator.py
 
 
-from state import NutritionState
-from schemas.nutrition_schemas import ValidationResult
+from graph.state import NutritionState
+from graph.nutrition_schemas import ValidationResult
 import logging
 logger = logging.getLogger(__name__)
 
@@ -172,6 +172,3 @@ def nutrition_validation_node(state: NutritionState) -> dict:
         "validation_passed": overall_pass,
         "validation_notes":  notes,
     }
-
-
-    # 🗸   ✗

@@ -22,7 +22,7 @@ from __future__ import annotations
 import logging
 
 from langgraph.types import interrupt
-from state import NutritionState
+from graph.state import NutritionState
 
 logger = logging.getLogger(__name__)
 

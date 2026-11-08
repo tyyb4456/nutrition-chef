@@ -23,7 +23,7 @@ from db.models import (
     RecipeNutrition, MealPlan, MealPlanItem, UserFeedback,
     MealLog, LearnedPreference, RecipeStep
 )
-from schemas.nutrition_schemas import (
+from graph.nutrition_schemas import (
     RecipeOutput, MacroSplit, MedicalCondition,
     LearnedPreferences, MealLogEntry, DailyAdherence,
 )

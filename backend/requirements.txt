@@ -1,6 +1,7 @@
 langchain
 langgraph
-langgraph-checkpoint-postgres   # PostgreSQL checkpointer for LangGraph
+langgraph-checkpoint-postgres  
+langchain-openai
 pydantic
 pydantic-settings
 tenacity
@@ -8,15 +9,13 @@ python-dotenv
 langsmith
 pytest
 pytest-asyncio
-langchain-google-genai
 sqlalchemy>=2.0
 alembic
-psycopg2-binary                 # SQLAlchemy driver (kept for ORM layer)
-psycopg[binary]                 # psycopg v3 — required by langgraph-checkpoint-postgres
-psycopg-pool                    # connection pool for psycopg v3
+psycopg2-binary      
+psycopg[binary]                
+psycopg-pool          
 redis>=5.0
 chromadb
-google-generativeai
 pytest
 pytest-asyncio
 
@@ -27,8 +26,6 @@ fastapi
 uvicorn
 
 pydantic[email]
-
-langgraph-checkpoint-postgres
 
 python-multipart
 

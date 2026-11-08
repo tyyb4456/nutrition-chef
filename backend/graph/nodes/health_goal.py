@@ -1,7 +1,8 @@
 # agents/health_agent.py
 
-from state import NutritionState
-from schemas.nutrition_schemas import MacroSplit, AgeProfile, MedicalCondition
+from graph.state import NutritionState
+from graph.nutrition_schemas import MacroSplit, AgeProfile, MedicalCondition
+from langgraph.config import get_stream_writer
 
 import logging
 logger = logging.getLogger(__name__)
@@ -182,7 +183,7 @@ def _apply_medical_calorie_adjustments(
 
 def health_goal_node(state: NutritionState) -> dict:
     logger.info("\n Calculating science-based dietary requirements...")
-    from langgraph.config import get_stream_writer
+    
     writer = get_stream_writer()
     writer({"status": "Analysing your profile and calculating calorie targets…"})
 

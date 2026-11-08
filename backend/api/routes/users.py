@@ -19,7 +19,7 @@ from api.dependencies import get_db, get_current_user
 from api.schemas.auth_schemas import UpdateProfileRequest, UserProfileResponse
 from db.models import User
 from db.repositories import UserRepository
-from schemas.nutrition_schemas import MedicalCondition, MedicalConditionType
+from graph.nutrition_schemas import MedicalCondition, MedicalConditionType
 
 logger = logging.getLogger(__name__)
 

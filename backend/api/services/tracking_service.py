@@ -22,7 +22,7 @@ from sqlalchemy.orm import Session
 
 from db.models import User, UserFeedback, MealLog
 from db.repositories import UserRepository, ProgressRepository
-from schemas.nutrition_schemas import MealLogEntry
+from graph.nutrition_schemas import MealLogEntry
 from cache.memory_cache import mem_cache, TTL_ADHERENCE
 from api.schemas.tracking_schemas import (
     SubmitFeedbackRequest, FeedbackResponse, FeedbackListResponse,
@@ -118,7 +118,7 @@ def _resume_graph_for_learning(
     """
     try:
         from langgraph.types import Command
-        from pipeline.nutrition_graph import nutrition_graph
+        from graph.nutrition_graph import nutrition_graph
 
         config = {"configurable": {"thread_id": thread_id}}
 

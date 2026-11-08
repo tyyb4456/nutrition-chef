@@ -10,14 +10,13 @@ from typing import Optional
 
 from sqlalchemy.orm import Session
 
-from state import NutritionState
-from schemas.nutrition_schemas import MedicalCondition, MacroSplit
+from graph.state import NutritionState
+from graph.nutrition_schemas import MedicalCondition, MacroSplit
 from db.models import User
 from db.repositories import UserRepository, RecipeRepository
 from cache.memory_cache import mem_cache, TTL_RECIPE, TTL_RECIPE_LIST
-from nodes.health_goal  import health_goal_node
-from nodes.followup     import followup_node
-from pipeline.nutrition_graph import nutrition_graph
+from graph.nodes.health_goal  import health_goal_node
+from graph.nutrition_graph import nutrition_graph
 from api.schemas.recipe_schemas import (
     GenerateRecipeRequest, RecipeResponse, RecipeSummary, RecipeListResponse,
     IngredientOut, NutritionOut, SubstitutionOut, ValidationOut, FollowupResponse,
@@ -70,7 +69,7 @@ def _build_state_from_profile(
     # learning — preferences are NOT stored in the graph checkpoint (thread-scoped).
     learned_prefs = None
     try:
-        from memory.progress_store import load_learned_preferences
+        from graph.progress_store import load_learned_preferences
         learned_prefs = load_learned_preferences(user.id)
         if learned_prefs:
             logger.info(
@@ -114,39 +113,6 @@ def _build_state_from_profile(
 
         profile_collected = True,   
     )
-
-
-
-# ═══════════════════════════════════════════════════════════════
-# PIPELINE RUNNER  (proper LangGraph graph.invoke)
-# ═══════════════════════════════════════════════════════════════
-
-def _run_graph_until_interrupt(
-    state: NutritionState,
-    thread_id: str,
-) -> tuple[NutritionState, list]:
-    """
-    Run nutrition_graph from the beginning until the feedback interrupt fires.
-
-    Returns:
-        (final_state_snapshot, interrupts_list)
-
-    The graph pauses at feedback_node's interrupt() call.
-    The caller must resume later via Command(resume=...) on the same thread_id.
-    """
-    config = {"configurable": {"thread_id": thread_id}}
-
-    result = nutrition_graph.invoke(state, config=config, version="v2")
-
-    # result is a GraphOutput (dict-like) in LangGraph v2
-    # .interrupts is a list of Interrupt objects with .value containing the payload
-    interrupts = getattr(result, "interrupts", None) or []
-
-    # Reconstruct NutritionState from the snapshot stored in the checkpointer
-    snapshot = nutrition_graph.get_state(config)
-    final_state = NutritionState(**snapshot.values) if snapshot else NutritionState()
-
-    return final_state, interrupts
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -352,205 +318,6 @@ async def generate_recipe_stream(
             return
 
         yield f"data: {json.dumps(item)}\n\n"
-
-
-async def generate_recipe(
-    user: User,
-    db: Session,
-    request: GenerateRecipeRequest,
-) -> RecipeResponse:
-    """
-    Main entry point called by POST /recipes/generate.
-
-    Flow:
-      1. Build NutritionState from DB profile.
-      2. Run nutrition_graph until feedback interrupt fires (thread pauses).
-      3. Save recipe to DB.
-      4. Return RecipeResponse with thread_id so client can resume via POST /feedback/.
-    """
-    import asyncio
-
-    # ── Build initial state ───────────────────────────────────────────────────
-    state     = _build_state_from_profile(user, db, request)
-    thread_id = f"gen-{uuid.uuid4()}"   # prefix so tracking_service routes to nutrition_graph
-
-    # ── Run compiled graph in thread pool (LLM calls are blocking) ────────────
-    loop = asyncio.get_event_loop()
-    final_state, interrupts = await loop.run_in_executor(
-        _executor,
-        _run_graph_until_interrupt,
-        state,
-        thread_id,
-    )
-
-    if not final_state.final_recipe:
-        raise ValueError("   ✗   Pipeline completed but no final recipe in state.")
-
-    if not interrupts:
-        logger.warning(
-            "   ⚠   Graph finished without an interrupt — feedback_node may have been skipped. "
-            "thread_id=%s", thread_id,
-        )
-
-    # ── Persist recipe to DB ──────────────────────────────────────────────────
-    recipe_repo = RecipeRepository(db)
-    recipe_id   = recipe_repo.save(
-        final_state.final_recipe,
-        source      = "generated",
-        explanation = final_state.recipe_explanation,
-        user_id     = user.id,
-        thread_id   = thread_id,
-    )
-    db.flush()
-
-    # ── Store recipe_id back into the graph's checkpointed state ─────────────
-    # So that when the graph resumes at feedback_node, state.current_recipe_id
-    # is set and the feedback can be linked to the correct DB row.
-    config = {"configurable": {"thread_id": thread_id}}
-    nutrition_graph.update_state(
-        config,
-        {"current_recipe_id": recipe_id},
-    )
-
-    logger.info(
-        "   🗸   Recipe '%s' saved (id=%s, thread=%s) for user %s",
-        final_state.final_recipe.dish_name, recipe_id, thread_id, user.id,
-    )
-
-    # Bust recipe list cache — new recipe now exists for this user
-    mem_cache.delete_prefix(f"recipe_list:{user.id}:")
-
-    return _build_response(final_state, recipe_id, thread_id=thread_id)
-
-
-async def followup_recipe(
-    user: User,
-    db: Session,
-    recipe_id: str,
-    prompt: str,
-) -> "FollowupResponse":
-    """
-    Entry point for POST /recipes/{recipe_id}/followup.
-
-    intent == question / done:
-        Runs followup_node only (cheap classify call, no graph).
-
-    intent == modify:
-        pass
-    """
-    import asyncio
-    from schemas.nutrition_schemas import RecipeOutput, Ingredient, NutritionFacts
-
-    loop = asyncio.get_event_loop()
-
-    # ── Load saved Recipe row from DB ─────────────────────────────────────────
-    recipe_repo = RecipeRepository(db)
-    saved       = recipe_repo.get_by_id(recipe_id)
-    if not saved:
-        raise ValueError(f"   ✗   Recipe '{recipe_id}' not found.")
-
-    n = saved.nutrition
-    prior_recipe = RecipeOutput(
-        dish_name         = saved.name,
-        cuisine           = saved.cuisine,
-        meal_type         = saved.meal_type,
-        prep_time_minutes = saved.prep_time_minutes,
-        ingredients       = [Ingredient(name=i.name, quantity=i.quantity) for i in (saved.ingredients or [])],
-        steps             = [],
-        nutrition         = NutritionFacts(
-            calories=n.calories if n else 0,   protein_g=n.protein_g if n else 0.0,
-            carbs_g=n.carbs_g if n else 0.0,   fat_g=n.fat_g if n else 0.0,
-            fiber_g=n.fiber_g if n else None,   sodium_mg=n.sodium_mg if n else None,
-            calcium_mg=n.calcium_mg if n else None, iron_mg=n.iron_mg if n else None,
-            sugar_g=n.sugar_g if n else None,
-        ),
-    )
-
-    # ── Build state for intent classification ─────────────────────────────────
-    classify_state = _build_state_from_profile(user, db, GenerateRecipeRequest())
-    updates        = health_goal_node(classify_state)   # calorie context for Q&A
-    classify_state = classify_state.model_copy(update={
-        **updates,
-        "final_recipe":      prior_recipe,
-        "recipe_explanation": None,
-        "current_recipe_id": recipe_id,
-        "followup_prompt":   prompt,
-    })
-
-    # ── Step 1: Classify intent (lightweight followup_node call) ──────────────
-    def _classify(s: NutritionState) -> NutritionState:
-        return s.model_copy(update=followup_node(s))
-
-    classified = await loop.run_in_executor(_executor, _classify, classify_state)
-    intent      = classified.followup_intent
-
-    # ── Step 2: Route by intent ───────────────────────────────────────────────
-    if intent == "question":
-        logger.info("Follow-up intent: question.")
-        return FollowupResponse(
-            intent=intent, answer=classified.followup_answer,
-            recipe=None, followup_history=classified.followup_history,
-        )
-
-    if intent == "done":
-        logger.info("Follow-up intent: done.")
-        return FollowupResponse(
-            intent=intent, answer="You're all set! Enjoy your meal.",
-            recipe=None, followup_history=classified.followup_history,
-        )
-
-    # intent == "modify" — reuse nutrition_graph end-to-end (same as generate)
-    logger.info(
-        "   🗸   Follow-up intent: modify ('%s') — invoking nutrition_graph.",
-        classified.followup_modification,
-    )
-
-    # Fresh state so the graph runs all nodes without stale flags.
-    # Inject modification into preferences so recipe_generator_node picks it up.
-    mod_state = _build_state_from_profile(user, db, GenerateRecipeRequest())
-    mod_state = mod_state.model_copy(update={
-        "preferences": {
-            **mod_state.preferences,
-            "followup_modification": classified.followup_modification,
-        },
-        "followup_modification": classified.followup_modification,
-        "followup_history":      classified.followup_history,
-    })
-
-    mod_thread_id = f"mod-{uuid.uuid4()}"
-    final_state, _ = await loop.run_in_executor(
-        _executor, _run_graph_until_interrupt, mod_state, mod_thread_id,
-    )
-
-    if not final_state.final_recipe:
-        raise ValueError("   ✗   Recipe modification failed — no final recipe in state.")
-
-    # Save modified recipe to DB + patch recipe_id into paused graph checkpoint
-    new_recipe_id = recipe_repo.save(
-        final_state.final_recipe, source="regenerated",
-        explanation=final_state.recipe_explanation,
-        user_id=user.id,
-    )
-    db.flush()
-    nutrition_graph.update_state(
-        {"configurable": {"thread_id": mod_thread_id}},
-        {"current_recipe_id": new_recipe_id},
-    )
-
-    logger.info("   🗸   Modified recipe saved (id=%s, thread=%s) for user %s",
-                new_recipe_id, mod_thread_id, user.id)
-
-    # Bust recipe list cache — modified recipe is a new row for this user
-    mem_cache.delete_prefix(f"recipe_list:{user.id}:")
-
-    return FollowupResponse(
-        intent           = "modify",
-        answer           = None,
-        recipe           = _build_response(final_state, new_recipe_id, thread_id=mod_thread_id),
-        followup_history = classified.followup_history,
-        thread_id        = mod_thread_id,
-    )
-
 
 
 def get_recipe_by_id(recipe_id: str, db: Session) -> Optional[RecipeResponse]:

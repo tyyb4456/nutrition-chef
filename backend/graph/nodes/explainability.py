@@ -4,17 +4,20 @@ agents/explainability_agent.py
 Phase 2: explanation now includes age-specific and medical condition reasoning.
 """
 
-from state import NutritionState
-from langchain.chat_models import init_chat_model
+from graph.state import NutritionState
+from graph.llm import build_xkiro_llm
 from langchain_core.prompts import ChatPromptTemplate
 from dotenv import load_dotenv
 
 load_dotenv()
 
 import logging
+from functools import lru_cache
 logger = logging.getLogger(__name__)
 
-model = init_chat_model("google_genai:gemini-2.5-flash")
+@lru_cache(maxsize=1)
+def _get_model():
+    return build_xkiro_llm()
 
 EXPLANATION_PROMPT = ChatPromptTemplate.from_template("""
 You are an AI Nutrition Assistant. Explain this meal choice to the customer
@@ -91,5 +94,5 @@ def explainability_node(state: NutritionState) -> dict:
         fiber=nutrition.fiber_g or "not reported",
     )
 
-    response = model.invoke(messages)
+    response = _get_model().invoke(messages)
     return {"recipe_explanation": response.content}

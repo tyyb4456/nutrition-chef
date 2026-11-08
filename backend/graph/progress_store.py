@@ -15,7 +15,7 @@ from datetime import date, timedelta
 from pathlib import Path
 from typing import Optional
 
-from schemas.nutrition_schemas import MealLogEntry, DailyAdherence, LearnedPreferences
+from graph.nutrition_schemas import MealLogEntry, DailyAdherence, LearnedPreferences
 
 logger = logging.getLogger(__name__)
 
@@ -104,7 +104,7 @@ def get_daily_adherence(
         logger.warning("   ⚠   DB get_daily_adherence failed (%s) — computing from JSON.", e)
 
     # ── JSON fallback: compute from raw logs ──────────────────────────────────
-    from schemas.nutrition_schemas import DailyAdherence as DA
+    from graph.nutrition_schemas import DailyAdherence as DA
     logs    = get_logs(user_id, days)
     by_day: dict[str, list[MealLogEntry]] = {}
     for entry in logs:
@@ -141,7 +141,7 @@ def save_learned_preferences(user_id: str, prefs: LearnedPreferences) -> None:
 
     # ── Also update faiss preference embedding ─────────────────────────────
     try:
-        from vector_store.langchain_store import langchain_store
+        from graph.rag_pipeline import langchain_store
         pref_text = (
             f"Likes: {', '.join(prefs.liked_ingredients)}. "
             f"Dislikes: {', '.join(prefs.disliked_ingredients)}. "
